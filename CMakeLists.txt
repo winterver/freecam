@@ -1,14 +1,19 @@
 cmake_minimum_required(VERSION 3.5)
 project(freecam)
 
-include_directories(lib D:/Application/VulkanSDK/1.3.283.0/Include)
-link_directories(lib D:/Application/VulkanSDK/1.3.283.0/Lib)
+if(WIN32)
+    set(VULKAN_HOME D:/Application/VulkanSDK/1.3.283.0)
+    include_directories(lib ${VULKAN_HOME}/Include)
+    link_directories(lib ${VULKAN_HOME}/Lib)
+endif()
 
 add_executable(freecam
                src/main.cpp
-               lib/Volk/volk.c)
+               src/volk.c)
 
-target_compile_options(freecam PRIVATE /MD)
+if(WIN32)
+    target_compile_options(freecam PRIVATE /MD)
+endif()
 target_link_libraries(freecam glfw3)
 
 include(FetchContent)
@@ -22,7 +27,8 @@ include(AddSpirvModules)
 add_spirv_modules(compile_shaders
                   BINARY_DIR shaders
                   SOURCE_DIR src/shaders
-                  SOURCES    shader.vert shader.frag)
+                  SOURCES    shader.vert shader.frag
+                  OPTIONS    -O)
 
 add_custom_target(embed_shaders
                   COMMAND ${CMAKE_COMMAND}

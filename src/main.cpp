@@ -8,7 +8,7 @@
 // helper library for Vulkan
 // no need to include vulkan.h
 // automatically find Vulkan libraries and load extension functions
-#include <Volk/volk.h>
+#include "volk.h"
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 #include "embeded_shaders.h"
