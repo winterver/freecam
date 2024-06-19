@@ -3,6 +3,7 @@
 #include <iostream>
 #include <vector>
 #include <algorithm>
+#include <string>
 
 // helper library for Vulkan
 // no need to include vulkan.h
@@ -14,6 +15,8 @@
 
 class FApplication
 {
+    FApplication(const FApplication&) = delete;
+    FApplication& operator=(const FApplication&) = delete;
 private:
     VkInstance instance;
     VkDebugUtilsMessengerEXT debugMessenger;
@@ -73,6 +76,7 @@ public:
         std::vector<VkExtensionProperties> availableExtensions(extensionCount);
         vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, availableExtensions.data());
 
+        std::string errlog;
         // check if required extensions exist
         for (const auto& extensionName : requiredExtensions) {
             auto find_ext = [=](const VkExtensionProperties& extension) {
@@ -80,8 +84,13 @@ public:
             };
             auto it = std::find_if(availableExtensions.begin(), availableExtensions.end(), find_ext);
             if (it == availableExtensions.end()) {
-                std::cerr << "Requested extension not supported: " << extensionName << std::endl;
+                errlog += std::string("\t") + extensionName + "\n";
             }
+        }
+
+        if (!errlog.empty()) {
+            std::string prefix = "Requested extension not supported:\n";
+            throw std::runtime_error(prefix + errlog);
         }
 
         const std::vector<const char*> requiredValidationLayers = {
@@ -94,6 +103,7 @@ public:
         std::vector<VkLayerProperties> availableLayers(layerCount);
         vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
 
+        errlog.clear();
         // check if required validation layers exist
         for (const auto& layerName : requiredValidationLayers) {
             auto find_layer = [=](const VkLayerProperties& layer) {
@@ -101,19 +111,24 @@ public:
             };
             auto it = std::find_if(availableLayers.begin(), availableLayers.end(), find_layer);
             if (it == availableLayers.end()) {
-                std::cerr << "Requested validation layer not supported: " << layerName << std::endl;
+                errlog += std::string("\t") + layerName + "\n";
             }
         }
 
-        VkInstanceCreateInfo createInfo{};
-        createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-        createInfo.pApplicationInfo = &appInfo;
-        createInfo.enabledExtensionCount = (uint32_t)requiredExtensions.size();
-        createInfo.ppEnabledExtensionNames = requiredExtensions.data();
-        createInfo.enabledLayerCount = (uint32_t)requiredValidationLayers.size();
-        createInfo.ppEnabledLayerNames = requiredValidationLayers.data();
+        if (!errlog.empty()) {
+            std::string prefix = "Requested validation layer not supported:\n";
+            throw std::runtime_error(prefix + errlog);
+        }
 
-        if (vkCreateInstance(&createInfo, nullptr, &instance) != VK_SUCCESS) {
+        VkInstanceCreateInfo instanceInfo{};
+        instanceInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+        instanceInfo.pApplicationInfo = &appInfo;
+        instanceInfo.enabledExtensionCount = (uint32_t)requiredExtensions.size();
+        instanceInfo.ppEnabledExtensionNames = requiredExtensions.data();
+        instanceInfo.enabledLayerCount = (uint32_t)requiredValidationLayers.size();
+        instanceInfo.ppEnabledLayerNames = requiredValidationLayers.data();
+
+        if (vkCreateInstance(&instanceInfo, nullptr, &instance) != VK_SUCCESS) {
             throw std::runtime_error("Failed to create Vulkan instance");
         }
 
@@ -121,15 +136,15 @@ public:
         volkLoadInstance(instance);
 
         // setup debug call back
-        VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo{};
-        debugCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-        debugCreateInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT
-                                        | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT
-                                        | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-        debugCreateInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT
-                                    | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT
-                                    | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-        debugCreateInfo.pfnUserCallback = [](
+        VkDebugUtilsMessengerCreateInfoEXT debugInfo{};
+        debugInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+        debugInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT
+                                  | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT
+                                  | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+        debugInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT
+                              | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT
+                              | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+        debugInfo.pfnUserCallback = [](
             VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
             VkDebugUtilsMessageTypeFlagsEXT messageType,
             const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
@@ -139,7 +154,7 @@ public:
             return VK_FALSE;
         };
 
-        if (vkCreateDebugUtilsMessengerEXT(instance, &debugCreateInfo, nullptr, &debugMessenger) != VK_SUCCESS) {
+        if (vkCreateDebugUtilsMessengerEXT(instance, &debugInfo, nullptr, &debugMessenger) != VK_SUCCESS) {
            throw std::runtime_error("Failed to setup debug messenger");
         }
 
@@ -236,6 +251,10 @@ public:
             }
             index++;
         }
+
+        if (graphicsFamilyIndex < 0 || presentFamilyIndex < 0) {
+            throw std::runtime_error("Requested queue families not supported");
+        }
     }
 
     void createDevice()
@@ -260,26 +279,33 @@ public:
         std::vector<VkExtensionProperties> availableExtensions(extensionCount);
         vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &extensionCount, availableExtensions.data());
 
+        std::string errlog;
         for (const auto& extensionName : requiredExtensions) {
             auto find_ext = [=](const VkExtensionProperties& extension) {
                 return !strcmp(extensionName, extension.extensionName);
             };
             auto it = std::find_if(availableExtensions.begin(), availableExtensions.end(), find_ext);
             if (it == availableExtensions.end()) {
-                std::cerr << "Requested device extension not supported: " << extensionName << std::endl;
+                errlog += std::string("\t") + extensionName + "\n";
             }
         }
 
-        VkDeviceCreateInfo createInfo{};
-        createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-        createInfo.pQueueCreateInfos = queueCreateInfos;
-        createInfo.queueCreateInfoCount = 2;
-        createInfo.enabledExtensionCount = (uint32_t)requiredExtensions.size();
-        createInfo.ppEnabledExtensionNames = requiredExtensions.data();
-        VkPhysicalDeviceFeatures deviceFeatures{};
-        createInfo.pEnabledFeatures = &deviceFeatures;
+        if (!errlog.empty()) {
+            std::string prefix = "Requested device extension not supported:\n";
+            throw std::runtime_error(prefix + errlog);
+        }
 
-        if (vkCreateDevice(physicalDevice, &createInfo, nullptr, &device) != VK_SUCCESS) {
+        VkPhysicalDeviceFeatures deviceFeatures{};
+
+        VkDeviceCreateInfo deviceInfo{};
+        deviceInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+        deviceInfo.queueCreateInfoCount = 2;
+        deviceInfo.pQueueCreateInfos = queueCreateInfos;
+        deviceInfo.enabledExtensionCount = (uint32_t)requiredExtensions.size();
+        deviceInfo.ppEnabledExtensionNames = requiredExtensions.data();
+        deviceInfo.pEnabledFeatures = &deviceFeatures;
+
+        if (vkCreateDevice(physicalDevice, &deviceInfo, nullptr, &device) != VK_SUCCESS) {
             throw std::runtime_error("Failed to create logical device");
         }
 
@@ -318,26 +344,27 @@ public:
             imageCount = capabilities.maxImageCount;
         }
 
-        VkSwapchainCreateInfoKHR createInfo{};
-        createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-        createInfo.surface = surface;
-        createInfo.minImageCount = imageCount;
-        createInfo.imageFormat = surfaceFormat.format;
-        createInfo.imageColorSpace = surfaceFormat.colorSpace;
-        createInfo.imageExtent = extent;
-        createInfo.imageArrayLayers = 1;
-        createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-        createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
         uint32_t familyIndices[] = { (uint32_t)graphicsFamilyIndex, (uint32_t)presentFamilyIndex };
-        createInfo.pQueueFamilyIndices = familyIndices;
-        createInfo.queueFamilyIndexCount = 2;
-        createInfo.preTransform = capabilities.currentTransform;
-        createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-        createInfo.presentMode = presentMode;
-        createInfo.clipped = VK_TRUE;
-        createInfo.oldSwapchain = VK_NULL_HANDLE;
 
-        if (vkCreateSwapchainKHR(device, &createInfo, nullptr, &swapchain) != VK_SUCCESS) {
+        VkSwapchainCreateInfoKHR swapchainInfo{};
+        swapchainInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+        swapchainInfo.surface = surface;
+        swapchainInfo.minImageCount = imageCount;
+        swapchainInfo.imageFormat = surfaceFormat.format;
+        swapchainInfo.imageColorSpace = surfaceFormat.colorSpace;
+        swapchainInfo.imageExtent = extent;
+        swapchainInfo.imageArrayLayers = 1;
+        swapchainInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+        swapchainInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+        swapchainInfo.queueFamilyIndexCount = 2;
+        swapchainInfo.pQueueFamilyIndices = familyIndices;
+        swapchainInfo.preTransform = capabilities.currentTransform;
+        swapchainInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+        swapchainInfo.presentMode = presentMode;
+        swapchainInfo.clipped = VK_TRUE;
+        swapchainInfo.oldSwapchain = VK_NULL_HANDLE;
+
+        if (vkCreateSwapchainKHR(device, &swapchainInfo, nullptr, &swapchain) != VK_SUCCESS) {
             throw std::runtime_error("Failed to create swap chain");
         }
 
@@ -350,21 +377,21 @@ public:
 
         swapchainImageViews.resize(swapchainImages.size());
         for (size_t i = 0; i < swapchainImages.size(); i++) {
-            VkImageViewCreateInfo createInfo{};
-            createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-            createInfo.image = swapchainImages[i];
-            createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-            createInfo.format = swapchainImageFormat;
-            createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-            createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-            createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-            createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-            createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            createInfo.subresourceRange.baseMipLevel = 0;
-            createInfo.subresourceRange.levelCount = 1;
-            createInfo.subresourceRange.baseArrayLayer = 0;
-            createInfo.subresourceRange.layerCount = 1;
-            if (vkCreateImageView(device, &createInfo, nullptr, &swapchainImageViews[i]) != VK_SUCCESS) {
+            VkImageViewCreateInfo imageViewInfo{};
+            imageViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+            imageViewInfo.image = swapchainImages[i];
+            imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+            imageViewInfo.format = swapchainImageFormat;
+            imageViewInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+            imageViewInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+            imageViewInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+            imageViewInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+            imageViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            imageViewInfo.subresourceRange.baseMipLevel = 0;
+            imageViewInfo.subresourceRange.levelCount = 1;
+            imageViewInfo.subresourceRange.baseArrayLayer = 0;
+            imageViewInfo.subresourceRange.layerCount = 1;
+            if (vkCreateImageView(device, &imageViewInfo, nullptr, &swapchainImageViews[i]) != VK_SUCCESS) {
                 throw std::runtime_error("Failed to create image views");
             }
         }
@@ -415,18 +442,18 @@ public:
         VkShaderModule vertShaderModule;
         VkShaderModule fragShaderModule;
         {
-            VkShaderModuleCreateInfo createInfo{};
-            createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+            VkShaderModuleCreateInfo shaderModuleInfo{};
+            shaderModuleInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
 
-            createInfo.pCode = shader_vert_code;
-            createInfo.codeSize = shader_vert_size;
-            if (vkCreateShaderModule(device, &createInfo, nullptr, &vertShaderModule) != VK_SUCCESS) {
+            shaderModuleInfo.codeSize = shader_vert_size;
+            shaderModuleInfo.pCode = shader_vert_code;
+            if (vkCreateShaderModule(device, &shaderModuleInfo, nullptr, &vertShaderModule) != VK_SUCCESS) {
                 throw std::runtime_error("Failed to create vertex shader module");
             }
 
-            createInfo.pCode = shader_frag_code;
-            createInfo.codeSize = shader_frag_size;
-            if (vkCreateShaderModule(device, &createInfo, nullptr, &fragShaderModule) != VK_SUCCESS) {
+            shaderModuleInfo.codeSize = shader_frag_size;
+            shaderModuleInfo.pCode = shader_frag_code;
+            if (vkCreateShaderModule(device, &shaderModuleInfo, nullptr, &fragShaderModule) != VK_SUCCESS) {
                 throw std::runtime_error("Failed to create fragment shader module");
             }
         }
@@ -735,10 +762,6 @@ public:
 
 int main()
 {
-    if (volkInitialize() != VK_SUCCESS) {
-        throw std::runtime_error("Failed to find Vulkan on your computer");
-    }
-
     glfwInit();
     glfwDefaultWindowHints();
     glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
@@ -748,8 +771,15 @@ int main()
     GLFWwindow* window;
     window = glfwCreateWindow(1600, 900, "Freecam", nullptr, nullptr);
 
-    FApplication application(window);
-    application.run();
+    try {
+        if (volkInitialize() != VK_SUCCESS) {
+            throw std::runtime_error("Failed to find Vulkan on your computer");
+        }
+        FApplication application(window);
+        application.run();
+    } catch(std::exception& e) {
+        std::cerr << e.what() << std::endl;
+    }
 
     glfwDestroyWindow(window);
     glfwTerminate();
