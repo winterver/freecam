@@ -2,9 +2,12 @@ cmake_minimum_required(VERSION 3.5)
 project(freecam)
 
 if(WIN32)
-    set(VULKAN_HOME D:/Application/VulkanSDK/1.3.283.0)
-    include_directories(lib ${VULKAN_HOME}/Include)
-    link_directories(lib ${VULKAN_HOME}/Lib)
+    set(VULKAN_SDK D:/Application/VulkanSDK/1.3.283.0)
+    if(NOT EXISTS ${VULKAN_SDK})
+        message(FATAL_ERROR "Please set VulkanSDK path")
+    endif()
+    include_directories(lib ${VULKAN_SDK}/Include)
+    link_directories(lib ${VULKAN_SDK}/Lib)
 endif()
 
 add_executable(freecam

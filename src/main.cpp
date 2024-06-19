@@ -7,7 +7,8 @@
 
 // helper library for Vulkan
 // no need to include vulkan.h
-// automatically find Vulkan libraries and load extension functions
+// automatically find Vulkan libraries
+// and help to load extension functions
 #include "volk.h"
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
