@@ -17,8 +17,8 @@ FetchContent_Declare(cmake-spirv
                      GIT_TAG        origin/v1)
 FetchContent_MakeAvailable(cmake-spirv)
 list(APPEND CMAKE_MODULE_PATH ${cmake-spirv_SOURCE_DIR}/include)
-
 include(AddSpirvModules)
+
 add_spirv_modules(compile_shaders
                   BINARY_DIR shaders
                   SOURCE_DIR src/shaders
