@@ -9,7 +9,7 @@
 // no need to include vulkan.h
 // automatically find Vulkan libraries
 // and help to load extension functions
-#include "volk.h"
+#include <Volk/volk.h>
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 #include "embeded_shaders.h"
@@ -163,7 +163,7 @@ public:
             throw std::runtime_error("Failed to create window surface");
         }
 
-        findMostPowerfulGPU();
+        findGPU();
         createDevice();
         createSwapchain();
         createPipeline();
@@ -171,7 +171,7 @@ public:
         createCommandPool();
     }
 
-    void findMostPowerfulGPU()
+    void findGPU()
     {
         uint32_t deviceCount;
         vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr);
