@@ -14,7 +14,7 @@ add_executable(freecam
                src/main.cpp
                src/volk.c)
 
-if(WIN32)
+if(MSVC)
     target_compile_options(freecam PRIVATE /MD)
 endif()
 target_link_libraries(freecam glfw3)

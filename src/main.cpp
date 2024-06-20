@@ -13,7 +13,6 @@
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 #include "embeded_shaders.h"
-
 class FApplication
 {
     FApplication(const FApplication&) = delete;
@@ -665,14 +664,14 @@ public:
             VkViewport viewport{};
             viewport.x = 0.0f;
             viewport.y = 0.0f;
-            viewport.width = (float) swapchainExtent.width;
-            viewport.height = (float) swapchainExtent.height;
+            viewport.width = (float)swapchainExtent.width;
+            viewport.height = (float)swapchainExtent.height;
             viewport.minDepth = 0.0f;
             viewport.maxDepth = 1.0f;
             vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
 
             VkRect2D scissor{};
-            scissor.offset = {0, 0};
+            scissor.offset = { 0, 0 };
             scissor.extent = swapchainExtent;
             vkCmdSetScissor(commandBuffer, 0, 1, &scissor);            
 
