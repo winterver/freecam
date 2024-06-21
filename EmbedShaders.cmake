@@ -1,5 +1,3 @@
-# edited from https://stackoverflow.com/questions/11813271/embed-resources-eg-shader-code-images-into-executable-library-with-cmake
-
 # Collect input files
 file(GLOB bins ${dir}/*)
 # Find the latest timestamp of the input files
@@ -16,6 +14,8 @@ file(TIMESTAMP ${out} out_time "%y%m%d%H%M%S")
 if(NOT EXISTS ${out})
     set(out_time 0)
 endif()
+
+# edited from https://stackoverflow.com/questions/11813271/embed-resources-eg-shader-code-images-into-executable-library-with-cmake
 # Generate only if one of the input files is newer than the output file
 if(${bin_time} GREATER ${out_time})
     file(WRITE ${out} "")

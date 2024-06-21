@@ -4,20 +4,45 @@
 #include <vector>
 #include <algorithm>
 #include <string>
+#include <array>
 
-// helper library for Vulkan
-// no need to include vulkan.h
-// automatically find Vulkan libraries
-// and help to load extension functions
 #include <Volk/volk.h>
+#include <vma/vk_mem_alloc.h>
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 #include "embeded_shaders.h"
 
-class FApplication
+struct ColoredVertex
 {
-    FApplication(const FApplication&) = delete;
-    FApplication& operator=(const FApplication&) = delete;
+    glm::vec3 position;
+    glm::vec3 color;
+
+    static std::array<VkVertexInputBindingDescription, 1> getBindingDescription() {
+        std::array<VkVertexInputBindingDescription, 1> bindingDescription{};
+        bindingDescription[0].binding = 0;
+        bindingDescription[0].stride = sizeof(ColoredVertex);
+        bindingDescription[0].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+        return bindingDescription;
+    }
+
+    static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescriptions() {
+        std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions{};
+        attributeDescriptions[0].binding = 0;
+        attributeDescriptions[0].location = 0;
+        attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
+        attributeDescriptions[0].offset = offsetof(ColoredVertex, position);
+        attributeDescriptions[1].binding = 0;
+        attributeDescriptions[1].location = 1;
+        attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+        attributeDescriptions[1].offset = offsetof(ColoredVertex, color);
+        return attributeDescriptions;
+    }
+};
+
+class Application
+{
+    Application(const Application&) = delete;
+    Application& operator=(const Application&) = delete;
 private:
     VkInstance instance;
     VkDebugUtilsMessengerEXT debugMessenger;
@@ -44,6 +69,10 @@ private:
 
     std::vector<VkFramebuffer> swapchainFramebuffers;
 
+    VmaAllocator allocator;
+    VkBuffer vertexBuffer;
+    VmaAllocation allocation;
+
     VkCommandPool commandPool;
     VkCommandBuffer commandBuffer;
 
@@ -52,7 +81,7 @@ private:
     VkFence inFlightFence;
 
 public:
-    FApplication(GLFWwindow* window)
+    Application(GLFWwindow* window)
         : window(window)
     {
         VkApplicationInfo appInfo{};
@@ -168,6 +197,7 @@ public:
         createSwapchain();
         createPipeline();
         createFramebuffers();
+        createVertexBuffer();
         createCommandPool();
     }
 
@@ -482,12 +512,14 @@ public:
         dynamicStateInfo.dynamicStateCount = (uint32_t)dynamicStates.size();
         dynamicStateInfo.pDynamicStates = dynamicStates.data();
 
+        auto bindingDescription = ColoredVertex::getBindingDescription();
+        auto attributeDescriptions = ColoredVertex::getAttributeDescriptions();
         VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
         vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-        vertexInputInfo.vertexBindingDescriptionCount = 0;
-        vertexInputInfo.pVertexBindingDescriptions = nullptr; // Optional
-        vertexInputInfo.vertexAttributeDescriptionCount = 0;
-        vertexInputInfo.pVertexAttributeDescriptions = nullptr; // Optional
+        vertexInputInfo.vertexBindingDescriptionCount = (uint32_t)bindingDescription.size();
+        vertexInputInfo.pVertexBindingDescriptions = bindingDescription.data();
+        vertexInputInfo.vertexAttributeDescriptionCount = (uint32_t)attributeDescriptions.size();
+        vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
 
         VkPipelineInputAssemblyStateCreateInfo inputAssemblyInfo{};
         inputAssemblyInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -580,6 +612,47 @@ public:
                 throw std::runtime_error("Failed to create framebuffer");
             }
         }
+    }
+
+    void createVertexBuffer()
+    {
+        VmaVulkanFunctions vulkanFunctions = {};
+        vulkanFunctions.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
+        vulkanFunctions.vkGetDeviceProcAddr = vkGetDeviceProcAddr;
+
+        VmaAllocatorCreateInfo allocatorInfo{};
+        allocatorInfo.instance = instance;
+        allocatorInfo.physicalDevice = physicalDevice;
+        allocatorInfo.device = device;
+        allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_2;
+        allocatorInfo.pVulkanFunctions = &vulkanFunctions;
+        if (vmaCreateAllocator(&allocatorInfo, &allocator) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to create VMA allocator");
+        }
+
+        const std::vector<ColoredVertex> vertices = {
+            {{0.0f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}},
+            {{0.5f, 0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}},
+            {{-0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}}
+        };
+
+        VkBufferCreateInfo bufferInfo{};
+        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        bufferInfo.size = sizeof(vertices[0]) * vertices.size();
+        bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+        bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+        VmaAllocationCreateInfo allocInfo{};
+        allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+        if (vmaCreateBuffer(allocator, &bufferInfo, &allocInfo, &vertexBuffer, &allocation, nullptr) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to create vertex buffer");
+        }
+
+        void* data;
+        vmaMapMemory(allocator, allocation, &data);
+        memcpy(data, vertices.data(), sizeof(vertices[0]) * vertices.size());
+        vmaUnmapMemory(allocator, allocation);
     }
 
     void createCommandPool()
@@ -676,6 +749,10 @@ public:
             scissor.extent = swapchainExtent;
             vkCmdSetScissor(commandBuffer, 0, 1, &scissor);            
 
+            VkBuffer vertexBuffers[] = { vertexBuffer };
+            VkDeviceSize offsets[] = { 0 };
+            vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+
             vkCmdDraw(commandBuffer, 3, 1, 0, 0);
 
         vkCmdEndRenderPass(commandBuffer);
@@ -740,6 +817,9 @@ public:
 
         vkDeviceWaitIdle(device);
 
+        vkDestroyBuffer(device, vertexBuffer, nullptr);
+        vmaFreeMemory(allocator, allocation);
+        vmaDestroyAllocator(allocator);
         vkDestroySemaphore(device, imageAvailableSemaphore, nullptr);
         vkDestroySemaphore(device, renderFinishedSemaphore, nullptr);
         vkDestroyFence(device, inFlightFence, nullptr);
@@ -776,7 +856,7 @@ int main()
         if (volkInitialize() != VK_SUCCESS) {
             throw std::runtime_error("Failed to find Vulkan on your computer");
         }
-        FApplication application(window);
+        Application application(window);
         application.run();
     } catch(std::exception& e) {
         std::cerr << e.what() << std::endl;

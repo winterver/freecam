@@ -18,7 +18,7 @@ endif()
 
 add_executable(freecam
                src/main.cpp
-               src/volk.c)
+               src/header_only_impl.cpp)
 target_link_libraries(freecam glfw3)
 
 if(MSVC)
