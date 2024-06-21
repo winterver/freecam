@@ -70,8 +70,10 @@ private:
     std::vector<VkFramebuffer> swapchainFramebuffers;
 
     VmaAllocator allocator;
+    VkBuffer stagingBuffer;
+    VmaAllocation stagingAlloc;
     VkBuffer vertexBuffer;
-    VmaAllocation allocation;
+    VmaAllocation vertexAlloc;
 
     VkCommandPool commandPool;
     VkCommandBuffer commandBuffer;
@@ -197,8 +199,8 @@ public:
         createSwapchain();
         createPipeline();
         createFramebuffers();
-        createVertexBuffer();
         createCommandPool();
+        createVertexBuffer();
     }
 
     void findGPU()
@@ -636,23 +638,70 @@ public:
             {{-0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}}
         };
 
-        VkBufferCreateInfo bufferInfo{};
-        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        bufferInfo.size = sizeof(vertices[0]) * vertices.size();
-        bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-        bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        VkBufferCreateInfo vertexBufferInfo{};
+        vertexBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        vertexBufferInfo.size = sizeof(vertices[0]) * vertices.size();
+        vertexBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+        vertexBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
         VmaAllocationCreateInfo allocInfo{};
         allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-        allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-        if (vmaCreateBuffer(allocator, &bufferInfo, &allocInfo, &vertexBuffer, &allocation, nullptr) != VK_SUCCESS) {
+        allocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+        if (vmaCreateBuffer(allocator, &vertexBufferInfo, &allocInfo, &vertexBuffer, &vertexAlloc, nullptr) != VK_SUCCESS) {
             throw std::runtime_error("Failed to create vertex buffer");
         }
 
+        VkBufferCreateInfo stagingBufferInfo{};
+        stagingBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        stagingBufferInfo.size = sizeof(vertices[0]) * vertices.size();
+        stagingBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+        stagingBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+        allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+        if (vmaCreateBuffer(allocator, &stagingBufferInfo, &allocInfo, &stagingBuffer, &stagingAlloc, nullptr) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to create staging buffer");
+        }
+
         void* data;
-        vmaMapMemory(allocator, allocation, &data);
+        vmaMapMemory(allocator, stagingAlloc, &data);
         memcpy(data, vertices.data(), sizeof(vertices[0]) * vertices.size());
-        vmaUnmapMemory(allocator, allocation);
+        vmaUnmapMemory(allocator, stagingAlloc);
+
+        {
+            VkCommandBufferAllocateInfo allocInfo{};
+            allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+            allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+            allocInfo.commandPool = commandPool;
+            allocInfo.commandBufferCount = 1;
+
+            VkCommandBuffer commandBuffer;
+            vkAllocateCommandBuffers(device, &allocInfo, &commandBuffer);
+
+            VkCommandBufferBeginInfo beginInfo{};
+            beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+            beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+            vkBeginCommandBuffer(commandBuffer, &beginInfo);
+
+            VkBufferCopy copyRegion{};
+            copyRegion.size = sizeof(vertices[0]) * vertices.size();
+            vkCmdCopyBuffer(commandBuffer, stagingBuffer, vertexBuffer, 1, &copyRegion);
+
+            vkEndCommandBuffer(commandBuffer);
+
+            VkSubmitInfo submitInfo{};
+            submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+            submitInfo.commandBufferCount = 1;
+            submitInfo.pCommandBuffers = &commandBuffer;
+
+            vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+            vkQueueWaitIdle(graphicsQueue);
+
+            vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
+        }
+
+        vkDestroyBuffer(device, stagingBuffer, nullptr);
+        vmaFreeMemory(allocator, stagingAlloc);
     }
 
     void createCommandPool()
@@ -818,7 +867,7 @@ public:
         vkDeviceWaitIdle(device);
 
         vkDestroyBuffer(device, vertexBuffer, nullptr);
-        vmaFreeMemory(allocator, allocation);
+        vmaFreeMemory(allocator, vertexAlloc);
         vmaDestroyAllocator(allocator);
         vkDestroySemaphore(device, imageAvailableSemaphore, nullptr);
         vkDestroySemaphore(device, renderFinishedSemaphore, nullptr);
