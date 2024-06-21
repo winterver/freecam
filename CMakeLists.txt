@@ -2,22 +2,28 @@ cmake_minimum_required(VERSION 3.5)
 project(freecam)
 
 if(WIN32)
+    set(GLFW_HEADER C:/Users/I/vimfiles/.library)
+    set(GLFW_LIBRARY C:/Users/I/vimfiles/.library)
     set(VULKAN_SDK D:/Application/VulkanSDK/1.3.283.0)
-    if(NOT EXISTS ${VULKAN_SDK})
-        message(FATAL_ERROR "Please set VulkanSDK path")
+    if(NOT EXISTS ${GLFW_HEADER})
+        message(FATAL_ERROR "Please set library paths")
+    elseif(NOT EXISTS ${GLFW_LIBRARY})
+        message(FATAL_ERROR "Please set library paths")
+    elseif(NOT EXISTS ${VULKAN_SDK})
+        message(FATAL_ERROR "Please set library paths")
     endif()
-    include_directories(lib ${VULKAN_SDK}/Include)
-    link_directories(lib ${VULKAN_SDK}/Lib)
+    include_directories(${GLFW_HEADER} ${VULKAN_SDK}/Include)
+    link_directories(${GLFW_LIBRARY} ${VULKAN_SDK}/Lib)
 endif()
 
 add_executable(freecam
                src/main.cpp
                src/volk.c)
+target_link_libraries(freecam glfw3)
 
 if(MSVC)
     target_compile_options(freecam PRIVATE /MD)
 endif()
-target_link_libraries(freecam glfw3)
 
 include(FetchContent)
 FetchContent_Declare(cmake-spirv
