@@ -8,8 +8,13 @@
 
 #include <Volk/volk.h>
 #include <vma/vk_mem_alloc.h>
+
 #include <GLFW/glfw3.h>
+
+#define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
+#include <glm/gtx/transform.hpp>
+
 #include "embeded_shaders.h"
 
 template<class T>
@@ -569,10 +574,15 @@ public:
         colorBlendInfo.blendConstants[2] = 0.0f;
         colorBlendInfo.blendConstants[3] = 0.0f;
 
+        VkPushConstantRange pushConstantRange{};
+        pushConstantRange.offset = 0;
+        pushConstantRange.size = sizeof(glm::mat4);
+        pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
         VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
         pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-        pipelineLayoutInfo.setLayoutCount = 0;
-        pipelineLayoutInfo.pushConstantRangeCount = 0;
+        pipelineLayoutInfo.pushConstantRangeCount = 1;
+        pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
 
         if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
             throw std::runtime_error("Failed to create pipeline layout");
@@ -836,9 +846,13 @@ public:
             scissor.extent = swapchainExtent;
             vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
+            glm::mat4 MVP = glm::rotate((float)glfwGetTime(), glm::vec3(0.0f, 0.0f, 1.0f));
+            vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4), &MVP[0][0]);
+
             VkBuffer vertexBuffers[] = { vertexBuffer };
             VkDeviceSize offsets[] = { 0 };
             vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+
             vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT16);
 
             vkCmdDrawIndexed(commandBuffer, 6, 1, 0, 0, 0);
