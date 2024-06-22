@@ -230,6 +230,7 @@ public:
 
         const std::vector<const char*> requiredValidationLayers = {
             "VK_LAYER_KHRONOS_validation",
+            //"VK_LAYER_LUNARG_monitor", // display FPS in title bar
         };
         // get validation layers supported by Vulkan
         // they can be used to debug during development
@@ -452,7 +453,8 @@ public:
     void createSwapchain()
     {
         VkSurfaceFormatKHR surfaceFormat;
-        VkPresentModeKHR presentMode = VK_PRESENT_MODE_FIFO_KHR;
+        VkPresentModeKHR presentMode = VK_PRESENT_MODE_FIFO_KHR; // VSync
+        //VkPresentModeKHR presentMode = VK_PRESENT_MODE_IMMEDIATE_KHR; // Unlimited fps
         VkSurfaceCapabilitiesKHR capabilities;
 
         uint32_t formatCount;
