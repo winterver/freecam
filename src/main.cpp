@@ -75,10 +75,15 @@ public:
         glfwGetWindowSize(window, &width, &height);
         glfwSetCursorPos(window, width/2.0f, height/2.0f);
 
+        if (!glfwGetWindowAttrib(window, GLFW_FOCUSED)) {
+            xpos = width / 2.0f;
+            ypos = height / 2.0f;
+        }
+
         horizontal += float(mouseSpeed * (width/2.0f - xpos));
         vertical   -= float(mouseSpeed * (height/2.0f - ypos));
         horizontal = glm::mod(horizontal, glm::two_pi<float>());
-        vertical = glm::clamp(vertical, -glm::half_pi<float>(), glm::half_pi<float>());
+        vertical = glm::clamp(vertical, -1.57f, 1.57f);
 
         glm::vec3 direction(
             cos(vertical) * sin(horizontal), 
@@ -174,6 +179,7 @@ private:
 
     VkCommandPool commandPool;
     VkCommandBuffer commandBuffer;
+    Camera camera;
 
     VkSemaphore imageAvailableSemaphore;
     VkSemaphore renderFinishedSemaphore;
@@ -895,8 +901,6 @@ public:
         createFramebuffers();
     }
 
-    Camera camera;
-
     void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex)
     {
         VkCommandBufferBeginInfo beginInfo{};
@@ -955,11 +959,17 @@ public:
 
     void run()
     {
+        auto focusCallback = [](GLFWwindow* window, int focused) {
+            if (focused) {
+                int width, height;
+                glfwGetWindowSize(window, &width, &height);
+                glfwSetCursorPos(window, width/2.0f, height/2.0f);
+            }
+        };
+        glfwSetWindowFocusCallback(window, focusCallback);
+ 
         glfwShowWindow(window);
         glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
-        int width, height;
-        glfwGetWindowSize(window, &width, &height);
-        glfwSetCursorPos(window, width/2.0f, height/2.0f);
 
         while (glfwGetKey(window, GLFW_KEY_ESCAPE) != GLFW_PRESS && !glfwWindowShouldClose(window)) {
             glfwPollEvents();
