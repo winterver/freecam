@@ -12,6 +12,12 @@
 #include <glm/glm.hpp>
 #include "embeded_shaders.h"
 
+template<class T>
+uint32_t sizeof_container(T container)
+{
+    return uint32_t(sizeof(container[0]) * container.size());
+}
+
 struct ColoredVertex
 {
     glm::vec3 position;
@@ -69,11 +75,11 @@ private:
 
     std::vector<VkFramebuffer> swapchainFramebuffers;
 
-    VmaAllocator allocator;
-    VkBuffer stagingBuffer;
-    VmaAllocation stagingAlloc;
+    VmaAllocator allocator; 
     VkBuffer vertexBuffer;
     VmaAllocation vertexAlloc;
+    VkBuffer indexBuffer;
+    VmaAllocation indexAlloc;
 
     VkCommandPool commandPool;
     VkCommandBuffer commandBuffer;
@@ -616,94 +622,6 @@ public:
         }
     }
 
-    void createVertexBuffer()
-    {
-        VmaVulkanFunctions vulkanFunctions = {};
-        vulkanFunctions.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
-        vulkanFunctions.vkGetDeviceProcAddr = vkGetDeviceProcAddr;
-
-        VmaAllocatorCreateInfo allocatorInfo{};
-        allocatorInfo.instance = instance;
-        allocatorInfo.physicalDevice = physicalDevice;
-        allocatorInfo.device = device;
-        allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_2;
-        allocatorInfo.pVulkanFunctions = &vulkanFunctions;
-        if (vmaCreateAllocator(&allocatorInfo, &allocator) != VK_SUCCESS) {
-            throw std::runtime_error("Failed to create VMA allocator");
-        }
-
-        const std::vector<ColoredVertex> vertices = {
-            {{0.0f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}},
-            {{0.5f, 0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}},
-            {{-0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}}
-        };
-
-        VkBufferCreateInfo vertexBufferInfo{};
-        vertexBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        vertexBufferInfo.size = sizeof(vertices[0]) * vertices.size();
-        vertexBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-        vertexBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-        VmaAllocationCreateInfo allocInfo{};
-        allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-        allocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
-        if (vmaCreateBuffer(allocator, &vertexBufferInfo, &allocInfo, &vertexBuffer, &vertexAlloc, nullptr) != VK_SUCCESS) {
-            throw std::runtime_error("Failed to create vertex buffer");
-        }
-
-        VkBufferCreateInfo stagingBufferInfo{};
-        stagingBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        stagingBufferInfo.size = sizeof(vertices[0]) * vertices.size();
-        stagingBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-        stagingBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-        allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-        if (vmaCreateBuffer(allocator, &stagingBufferInfo, &allocInfo, &stagingBuffer, &stagingAlloc, nullptr) != VK_SUCCESS) {
-            throw std::runtime_error("Failed to create staging buffer");
-        }
-
-        void* data;
-        vmaMapMemory(allocator, stagingAlloc, &data);
-        memcpy(data, vertices.data(), sizeof(vertices[0]) * vertices.size());
-        vmaUnmapMemory(allocator, stagingAlloc);
-
-        {
-            VkCommandBufferAllocateInfo allocInfo{};
-            allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-            allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-            allocInfo.commandPool = commandPool;
-            allocInfo.commandBufferCount = 1;
-
-            VkCommandBuffer commandBuffer;
-            vkAllocateCommandBuffers(device, &allocInfo, &commandBuffer);
-
-            VkCommandBufferBeginInfo beginInfo{};
-            beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-            beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-            vkBeginCommandBuffer(commandBuffer, &beginInfo);
-
-            VkBufferCopy copyRegion{};
-            copyRegion.size = sizeof(vertices[0]) * vertices.size();
-            vkCmdCopyBuffer(commandBuffer, stagingBuffer, vertexBuffer, 1, &copyRegion);
-
-            vkEndCommandBuffer(commandBuffer);
-
-            VkSubmitInfo submitInfo{};
-            submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-            submitInfo.commandBufferCount = 1;
-            submitInfo.pCommandBuffers = &commandBuffer;
-
-            vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
-            vkQueueWaitIdle(graphicsQueue);
-
-            vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
-        }
-
-        vkDestroyBuffer(device, stagingBuffer, nullptr);
-        vmaFreeMemory(allocator, stagingAlloc);
-    }
-
     void createCommandPool()
     {
         VkCommandPoolCreateInfo poolInfo{};
@@ -737,6 +655,126 @@ public:
             vkCreateFence(device, &fenceInfo, nullptr, &inFlightFence) != VK_SUCCESS) {
             throw std::runtime_error("Failed to create synchronization objects for a frame");
         }
+    }
+
+    void createVertexBuffer()
+    {
+        VmaVulkanFunctions vulkanFunctions = {};
+        vulkanFunctions.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
+        vulkanFunctions.vkGetDeviceProcAddr = vkGetDeviceProcAddr;
+
+        VmaAllocatorCreateInfo allocatorInfo{};
+        allocatorInfo.instance = instance;
+        allocatorInfo.physicalDevice = physicalDevice;
+        allocatorInfo.device = device;
+        allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_2;
+        allocatorInfo.pVulkanFunctions = &vulkanFunctions;
+        if (vmaCreateAllocator(&allocatorInfo, &allocator) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to create VMA allocator");
+        }
+
+        const std::vector<ColoredVertex> vertices = {
+            { { -0.5f, -0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f } },
+            { { 0.5f, -0.5f, 0.0f }, { 0.0f, 1.0f, 0.0f } },
+            { { 0.5f, 0.5f, 0.0f }, { 0.0f, 0.0f, 1.0f } },
+            { { -0.5f, 0.5f, 0.0f }, { 1.0f, 1.0f, 1.0f } },
+        };
+
+        VkBufferCreateInfo vertexBufferInfo{};
+        vertexBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        vertexBufferInfo.size = sizeof_container(vertices);
+        vertexBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+        vertexBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+        VmaAllocationCreateInfo allocInfo{};
+        allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        allocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+        if (vmaCreateBuffer(allocator, &vertexBufferInfo, &allocInfo, &vertexBuffer, &vertexAlloc, nullptr) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to create vertex buffer");
+        }
+
+        const std::vector<uint16_t> indices = {
+            0, 1, 2, 2, 3, 0,
+        };
+
+        VkBufferCreateInfo indexBufferInfo{};
+        indexBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        indexBufferInfo.size = sizeof_container(indices);
+        indexBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+        indexBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+        allocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+        if (vmaCreateBuffer(allocator, &indexBufferInfo, &allocInfo, &indexBuffer, &indexAlloc, nullptr) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to create index buffer");
+        }
+
+        VkBuffer stagingBuffer;
+        VmaAllocation stagingAlloc;
+        uint32_t stagingSize = 65536;
+
+        VkBufferCreateInfo stagingBufferInfo{};
+        stagingBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        stagingBufferInfo.size = stagingSize;
+        stagingBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+        stagingBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+        allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+        if (vmaCreateBuffer(allocator, &stagingBufferInfo, &allocInfo, &stagingBuffer, &stagingAlloc, nullptr) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to create staging buffer");
+        }
+
+        auto uploadData = [&](VkBuffer targetBuffer, const void* src_data, uint32_t total_size) {
+            uint32_t cursor = 0;
+            do {
+                uint32_t size = total_size < stagingSize ? total_size : stagingSize;
+
+                void* data;
+                vmaMapMemory(allocator, stagingAlloc, &data);
+                memcpy(data, (char*)src_data + cursor, size);
+                vmaUnmapMemory(allocator, stagingAlloc);
+
+                VkCommandBufferAllocateInfo allocInfo{};
+                allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+                allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+                allocInfo.commandPool = commandPool;
+                allocInfo.commandBufferCount = 1;
+
+                VkCommandBuffer commandBuffer;
+                vkAllocateCommandBuffers(device, &allocInfo, &commandBuffer);
+
+                VkCommandBufferBeginInfo beginInfo{};
+                beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+                beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+                vkBeginCommandBuffer(commandBuffer, &beginInfo);
+
+                VkBufferCopy copyRegion{};
+                copyRegion.size = size;
+                copyRegion.dstOffset = cursor;
+                vkCmdCopyBuffer(commandBuffer, stagingBuffer, targetBuffer, 1, &copyRegion);
+
+                vkEndCommandBuffer(commandBuffer);
+
+                VkSubmitInfo submitInfo{};
+                submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+                submitInfo.commandBufferCount = 1;
+                submitInfo.pCommandBuffers = &commandBuffer;
+
+                vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+                vkQueueWaitIdle(graphicsQueue);
+
+                vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
+
+                cursor += size;
+                total_size -= size;
+            } while (total_size > 0);
+        };
+
+        uploadData(vertexBuffer, vertices.data(), sizeof_container(vertices));
+        uploadData(indexBuffer, indices.data(), sizeof_container(indices));
+
+        vkDestroyBuffer(device, stagingBuffer, nullptr);
+        vmaFreeMemory(allocator, stagingAlloc);
     }
 
     void recreateSwapchain() {
@@ -796,13 +834,14 @@ public:
             VkRect2D scissor{};
             scissor.offset = { 0, 0 };
             scissor.extent = swapchainExtent;
-            vkCmdSetScissor(commandBuffer, 0, 1, &scissor);            
+            vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
             VkBuffer vertexBuffers[] = { vertexBuffer };
             VkDeviceSize offsets[] = { 0 };
             vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+            vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT16);
 
-            vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+            vkCmdDrawIndexed(commandBuffer, 6, 1, 0, 0, 0);
 
         vkCmdEndRenderPass(commandBuffer);
 
@@ -866,6 +905,8 @@ public:
 
         vkDeviceWaitIdle(device);
 
+        vkDestroyBuffer(device, indexBuffer, nullptr);
+        vmaFreeMemory(allocator, indexAlloc);
         vkDestroyBuffer(device, vertexBuffer, nullptr);
         vmaFreeMemory(allocator, vertexAlloc);
         vmaDestroyAllocator(allocator);
