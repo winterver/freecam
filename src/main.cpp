@@ -191,7 +191,7 @@ public:
         appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
         appInfo.pEngineName = "Vulkan API";
         appInfo.engineVersion = VK_MAKE_VERSION(1, 2, 0);
-        appInfo.apiVersion = VK_API_VERSION_1_2;
+        appInfo.apiVersion = VK_API_VERSION_1_3;
 
         // get Vulkan extensions required by glfw
         uint32_t glfwExtensionCount;
@@ -609,6 +609,7 @@ public:
         std::vector<VkDynamicState> dynamicStates = {
             VK_DYNAMIC_STATE_VIEWPORT,
             VK_DYNAMIC_STATE_SCISSOR,
+            VK_DYNAMIC_STATE_DEPTH_TEST_ENABLE,
         };
         VkPipelineDynamicStateCreateInfo dynamicStateInfo{};
         dynamicStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
@@ -767,7 +768,7 @@ public:
         allocatorInfo.instance = instance;
         allocatorInfo.physicalDevice = physicalDevice;
         allocatorInfo.device = device;
-        allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_2;
+        allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_3;
         allocatorInfo.pVulkanFunctions = &vulkanFunctions;
         if (vmaCreateAllocator(&allocatorInfo, &allocator) != VK_SUCCESS) {
             throw std::runtime_error("Failed to create VMA allocator");
@@ -936,6 +937,8 @@ public:
             scissor.extent = swapchainExtent;
             vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
+            vkCmdSetDepthTestEnable(commandBuffer, VK_TRUE);
+
             glm::mat4 model = glm::rotate((float)glfwGetTime(), glm::vec3(0.0f, 0.0f, 1.0f));
             glm::mat4 MVP = camera.update(window) * model;
             vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4), &MVP[0][0]);
@@ -957,15 +960,6 @@ public:
 
     void run()
     {
-        auto focusCallback = [](GLFWwindow* window, int focused) {
-            if (focused) {
-                int width, height;
-                glfwGetWindowSize(window, &width, &height);
-                glfwSetCursorPos(window, width/2.0f, height/2.0f);
-            }
-        };
-        glfwSetWindowFocusCallback(window, focusCallback);
- 
         glfwShowWindow(window);
         glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
 
