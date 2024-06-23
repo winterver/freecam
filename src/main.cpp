@@ -15,7 +15,8 @@
 #include <glm/glm.hpp>
 #include <glm/gtx/transform.hpp>
 
-#include "embeded_shaders.h"
+#include "tiny_obj_loader.hpp"
+#include "embeded_shaders.hpp"
 
 template<class T>
 uint32_t sizeof_container(T container)
@@ -772,6 +773,15 @@ public:
         allocatorInfo.pVulkanFunctions = &vulkanFunctions;
         if (vmaCreateAllocator(&allocatorInfo, &allocator) != VK_SUCCESS) {
             throw std::runtime_error("Failed to create VMA allocator");
+        }
+
+        tinyobj::attrib_t attrib;
+        std::vector<tinyobj::shape_t> shapes;
+        std::vector<tinyobj::material_t> materials;
+        std::string warn, err;
+
+        if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, "model.obj")) {
+            throw std::runtime_error(warn + err);
         }
 
         const std::vector<ColoredVertex> vertices = {
