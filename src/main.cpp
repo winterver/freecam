@@ -780,7 +780,7 @@ public:
         std::vector<tinyobj::material_t> materials;
         std::string warn, err;
 
-        if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, "model.obj")) {
+        if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, "src/models/Kotori.obj")) {
             throw std::runtime_error(warn + err);
         }
 

@@ -3,4 +3,4 @@
 #define VMA_IMPLEMENTATION
 #include <vma/vk_mem_alloc.h>
 #define TINYOBJLOADER_IMPLEMENTATION
-#include "tiny_obj_loader.h"
+#include "tiny_obj_loader.hpp"

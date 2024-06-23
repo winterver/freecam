@@ -42,7 +42,7 @@ add_spirv_modules(compile_shaders
 add_custom_target(embed_shaders
                   COMMAND ${CMAKE_COMMAND}
                       -Ddir=${CMAKE_CURRENT_BINARY_DIR}/shaders
-                      -Dout=${PROJECT_SOURCE_DIR}/src/embeded_shaders.h
+                      -Dout=${PROJECT_SOURCE_DIR}/src/embeded_shaders.hpp
                       -P ${PROJECT_SOURCE_DIR}/EmbedShaders.cmake)
 
 add_dependencies(freecam embed_shaders)
