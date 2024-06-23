@@ -415,7 +415,7 @@ public:
     void createDevice()
     {
         float priorities[] = { 1.0f };
-        VkDeviceQueueCreateInfo queueCreateInfos[2]{};
+        std::array<VkDeviceQueueCreateInfo, 2> queueCreateInfos{};
         queueCreateInfos[0].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
         queueCreateInfos[0].queueFamilyIndex = graphicsFamilyIndex;
         queueCreateInfos[0].pQueuePriorities = priorities;
@@ -454,8 +454,8 @@ public:
 
         VkDeviceCreateInfo deviceInfo{};
         deviceInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-        deviceInfo.queueCreateInfoCount = 2;
-        deviceInfo.pQueueCreateInfos = queueCreateInfos;
+        deviceInfo.queueCreateInfoCount = (uint32_t)queueCreateInfos.size();
+        deviceInfo.pQueueCreateInfos = queueCreateInfos.data();
         deviceInfo.enabledExtensionCount = (uint32_t)requiredExtensions.size();
         deviceInfo.ppEnabledExtensionNames = requiredExtensions.data();
         deviceInfo.pEnabledFeatures = &deviceFeatures;
@@ -700,7 +700,7 @@ public:
 
         VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
 
-        std::vector<VkDynamicState> dynamicStates = {
+        const std::vector<VkDynamicState> dynamicStates = {
             VK_DYNAMIC_STATE_VIEWPORT,
             VK_DYNAMIC_STATE_SCISSOR,
         };
@@ -766,15 +766,15 @@ public:
         colorBlendInfo.blendConstants[2] = 0.0f;
         colorBlendInfo.blendConstants[3] = 0.0f;
 
-        VkPushConstantRange pushConstantRange{};
-        pushConstantRange.offset = 0;
-        pushConstantRange.size = sizeof(glm::mat4);
-        pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        std::array<VkPushConstantRange, 1> pushConstantRanges{};
+        pushConstantRanges[0].offset = 0;
+        pushConstantRanges[0].size = sizeof(glm::mat4);
+        pushConstantRanges[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
         VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
         pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-        pipelineLayoutInfo.pushConstantRangeCount = 1;
-        pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
+        pipelineLayoutInfo.pushConstantRangeCount = (uint32_t)pushConstantRanges.size();
+        pipelineLayoutInfo.pPushConstantRanges = pushConstantRanges.data();
 
         if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
             throw std::runtime_error("Failed to create pipeline layout");
@@ -809,13 +809,13 @@ public:
     {
         swapchainFramebuffers.resize(swapchainImageViews.size());
         for (size_t i = 0; i < swapchainImageViews.size(); i++) {
-            VkImageView attachments[] = { swapchainImageViews[i], depthImageView };
+            const std::vector<VkImageView> attachments = { swapchainImageViews[i], depthImageView };
 
             VkFramebufferCreateInfo framebufferInfo{};
             framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
             framebufferInfo.renderPass = renderPass;
-            framebufferInfo.attachmentCount = 2;
-            framebufferInfo.pAttachments = attachments;
+            framebufferInfo.attachmentCount = (uint32_t)attachments.size();
+            framebufferInfo.pAttachments = attachments.data();
             framebufferInfo.width = swapchainExtent.width;
             framebufferInfo.height = swapchainExtent.height;
             framebufferInfo.layers = 1;
@@ -1030,7 +1030,7 @@ public:
             throw std::runtime_error("Failed to begin recording command buffer");
         }
 
-        VkClearValue clearValues[2]{};
+        std::array<VkClearValue, 2> clearValues{};
         clearValues[0].color = { 0.0f, 0.0f, 0.0f, 1.0f };
         clearValues[1].depthStencil = { 1.0f, 0 };
 
@@ -1040,8 +1040,8 @@ public:
         renderPassInfo.framebuffer = swapchainFramebuffers[imageIndex];
         renderPassInfo.renderArea.offset = { 0, 0 };
         renderPassInfo.renderArea.extent = swapchainExtent;
-        renderPassInfo.clearValueCount = 2;
-        renderPassInfo.pClearValues = clearValues;
+        renderPassInfo.clearValueCount = (uint32_t)clearValues.size();
+        renderPassInfo.pClearValues = clearValues.data();
 
         vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
