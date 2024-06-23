@@ -108,29 +108,25 @@ public:
         glm::vec3 velocity{};
         if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS){
             velocity += forward;
-            velocity = glm::normalize(velocity);
         }
         if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS){
             velocity -= forward;
-            velocity = glm::normalize(velocity);
         }
         if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS){
             velocity += right;
-            velocity = glm::normalize(velocity);
         }
         if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS){
             velocity -= right;
-            velocity = glm::normalize(velocity);
         }
         if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS){
             velocity += up;
-            velocity = glm::normalize(velocity);
         }
         if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS){
             velocity -= up;
-            velocity = glm::normalize(velocity);
         }
-        position += velocity * speed * deltaTime;
+        if (glm::length(velocity) > 0) {
+            position += glm::normalize(velocity) * speed * deltaTime;
+        }
 
         int fbWdith, fbHeight;
         glfwGetFramebufferSize(window, &fbWdith, &fbHeight);
