@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <string>
 #include <array>
+#include <unordered_map>
 
 #include <Volk/volk.h>
 #include <vma/vk_mem_alloc.h>
@@ -14,6 +15,7 @@
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
 #include <glm/gtx/transform.hpp>
+#include <glm/gtx/hash.hpp>
 
 #include "tiny_obj_loader.hpp"
 #include "embeded_shaders.hpp"
@@ -24,7 +26,7 @@ uint32_t sizeof_container(T container)
     return uint32_t(sizeof(container[0]) * container.size());
 }
 
-struct ColoredVertex
+struct Vertex
 {
     glm::vec3 position;
     glm::vec3 color;
@@ -32,7 +34,7 @@ struct ColoredVertex
     static std::array<VkVertexInputBindingDescription, 1> getBindingDescription() {
         std::array<VkVertexInputBindingDescription, 1> bindingDescription{};
         bindingDescription[0].binding = 0;
-        bindingDescription[0].stride = sizeof(ColoredVertex);
+        bindingDescription[0].stride = sizeof(Vertex);
         bindingDescription[0].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
         return bindingDescription;
     }
@@ -42,14 +44,26 @@ struct ColoredVertex
         attributeDescriptions[0].binding = 0;
         attributeDescriptions[0].location = 0;
         attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
-        attributeDescriptions[0].offset = offsetof(ColoredVertex, position);
+        attributeDescriptions[0].offset = offsetof(Vertex, position);
         attributeDescriptions[1].binding = 0;
         attributeDescriptions[1].location = 1;
         attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-        attributeDescriptions[1].offset = offsetof(ColoredVertex, color);
+        attributeDescriptions[1].offset = offsetof(Vertex, color);
         return attributeDescriptions;
     }
+
+    bool operator==(const Vertex& other) const {
+        return position == other.position && color == other.color;
+    }
 };
+
+namespace std {
+    template<> struct hash<Vertex> {
+        size_t operator()(Vertex const& vertex) const {
+            return hash<glm::vec3>()(vertex.position) ^ (hash<glm::vec3>()(vertex.color) << 1);
+        }
+    };
+}
 
 class Camera
 {
@@ -173,6 +187,7 @@ private:
     VmaAllocation vertexAlloc;
     VkBuffer indexBuffer;
     VmaAllocation indexAlloc;
+    int indexCount;
 
     VkCommandPool commandPool;
     VkCommandBuffer commandBuffer;
@@ -617,8 +632,8 @@ public:
         dynamicStateInfo.dynamicStateCount = (uint32_t)dynamicStates.size();
         dynamicStateInfo.pDynamicStates = dynamicStates.data();
 
-        auto bindingDescription = ColoredVertex::getBindingDescription();
-        auto attributeDescriptions = ColoredVertex::getAttributeDescriptions();
+        auto bindingDescription = Vertex::getBindingDescription();
+        auto attributeDescriptions = Vertex::getAttributeDescriptions();
         VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
         vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
         vertexInputInfo.vertexBindingDescriptionCount = (uint32_t)bindingDescription.size();
@@ -784,12 +799,35 @@ public:
             throw std::runtime_error(warn + err);
         }
 
-        const std::vector<ColoredVertex> vertices = {
-            { { -0.5f, -0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f } },
-            { { 0.5f, -0.5f, 0.0f }, { 0.0f, 1.0f, 0.0f } },
-            { { 0.5f, 0.5f, 0.0f }, { 0.0f, 0.0f, 1.0f } },
-            { { -0.5f, 0.5f, 0.0f }, { 1.0f, 1.0f, 1.0f } },
-        };
+        std::vector<Vertex> vertices;
+        std::vector<uint32_t> indices;
+
+        std::unordered_map<Vertex, uint32_t> uniqueVertices{};
+        for (const auto& shape : shapes) {
+            for (const auto& index : shape.mesh.indices) {
+                Vertex vertex{};
+
+                vertex.position = {
+                    attrib.vertices[3 * index.vertex_index + 0],
+                    attrib.vertices[3 * index.vertex_index + 1],
+                    attrib.vertices[3 * index.vertex_index + 2]
+                };
+                vertex.color = {
+                    attrib.normals[3 * index.normal_index + 0],
+                    attrib.normals[3 * index.normal_index + 1],
+                    attrib.normals[3 * index.normal_index + 2]
+                };
+
+                if (uniqueVertices.count(vertex) == 0) {
+                    uniqueVertices[vertex] = (uint32_t)vertices.size();
+                    vertices.push_back(vertex);
+                }
+
+                indices.push_back(uniqueVertices[vertex]);
+            }
+        }
+
+        indexCount = indices.size();
 
         VkBufferCreateInfo vertexBufferInfo{};
         vertexBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -804,10 +842,6 @@ public:
             throw std::runtime_error("Failed to create vertex buffer");
         }
 
-        const std::vector<uint16_t> indices = {
-            0, 1, 2, 2, 3, 0,
-        };
-
         VkBufferCreateInfo indexBufferInfo{};
         indexBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
         indexBufferInfo.size = sizeof_container(indices);
@@ -821,7 +855,7 @@ public:
 
         VkBuffer stagingBuffer;
         VmaAllocation stagingAlloc;
-        uint32_t stagingSize = 65536;
+        uint32_t stagingSize = 1024 * 1024;
 
         VkBufferCreateInfo stagingBufferInfo{};
         stagingBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -949,7 +983,7 @@ public:
 
             vkCmdSetDepthTestEnable(commandBuffer, VK_TRUE);
 
-            glm::mat4 model = glm::rotate((float)glfwGetTime(), glm::vec3(0.0f, 0.0f, 1.0f));
+            glm::mat4 model = glm::rotate((float)glfwGetTime(), glm::vec3(0.0f, 1.0f, 0.0f));
             glm::mat4 MVP = camera.update(window) * model;
             vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4), &MVP[0][0]);
 
@@ -957,9 +991,9 @@ public:
             VkDeviceSize offsets[] = { 0 };
             vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
 
-            vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT16);
+            vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
-            vkCmdDrawIndexed(commandBuffer, 6, 1, 0, 0, 0);
+            vkCmdDrawIndexed(commandBuffer, indexCount, 1, 0, 0, 0);
 
         vkCmdEndRenderPass(commandBuffer);
 
