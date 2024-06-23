@@ -73,7 +73,7 @@ private:
     float vertical = 0.0f;
     float horizontal = glm::pi<float>();
     float speed = 3.0f;
-    float mouseSpeed = 0.005f;
+    float mouseSpeed = 0.002f;
     glm::vec3 position = glm::vec3(0.0f, 0.0f, 5.0f);
 
 public:
@@ -84,20 +84,19 @@ public:
         float deltaTime = float(currentTime - lastTime);
         lastTime = currentTime;
 
-        double xpos, ypos;
-        glfwGetCursorPos(window, &xpos, &ypos);
-
-        int width, height;
-        glfwGetWindowSize(window, &width, &height);
-        glfwSetCursorPos(window, width/2.0f, height/2.0f);
-
-        if (!glfwGetWindowAttrib(window, GLFW_FOCUSED)) {
-            xpos = width / 2.0f;
-            ypos = height / 2.0f;
+        static double lastX = 0, lastY = 0;
+        if (lastX == 0 && lastY == 0) {
+            glfwGetCursorPos(window, &lastX, &lastY);
         }
+        double currentX, currentY;
+        glfwGetCursorPos(window, &currentX, &currentY);
+        double dx = currentX - lastX;
+        double dy = currentY - lastY;
+        lastX = currentX;
+        lastY = currentY;
 
-        horizontal += float(mouseSpeed * (width/2.0f - xpos));
-        vertical   -= float(mouseSpeed * (height/2.0f - ypos));
+        horizontal -= float(mouseSpeed * dx);
+        vertical   += float(mouseSpeed * dy);
         horizontal = glm::mod(horizontal, glm::two_pi<float>());
         vertical = glm::clamp(vertical, -1.57f, 1.57f);
 
@@ -1083,7 +1082,7 @@ public:
     void run()
     {
         glfwShowWindow(window);
-        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
+        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
         while (glfwGetKey(window, GLFW_KEY_ESCAPE) != GLFW_PRESS && !glfwWindowShouldClose(window)) {
             glfwPollEvents();
