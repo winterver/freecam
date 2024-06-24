@@ -27,7 +27,7 @@ const int faces[6][6] = {
     { 0, 1, 5, 0, 5, 4 }, // -y
 };
 
-const vec2 uvs[4] = {
+const vec2 uvs[6] = {
     vec2(1, 0),
     vec2(1, 1),
     vec2(0, 1),

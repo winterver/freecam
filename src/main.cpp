@@ -173,6 +173,8 @@ private:
     VkBuffer indexBuffer;
     VmaAllocation indexAlloc;
     int indexCount;
+    VkBuffer blockBuffer;
+    VmaAllocation blockAlloc;
 
     VkCommandPool commandPool;
     VkCommandBuffer commandBuffer;
@@ -1003,6 +1005,26 @@ public:
             throw std::runtime_error("Failed to create index buffer");
         }
 
+        const std::vector<glm::ivec4> faces = {
+            { 0, 0, 0, 0 },
+            { 0, 0, 0, 1 },
+            { 0, 0, 0, 2 },
+            { 0, 0, 0, 3 },
+            { 0, 0, 0, 4 },
+            { 0, 0, 0, 5 },
+        };
+
+        VkBufferCreateInfo blockBufferInfo{};
+        blockBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        blockBufferInfo.size = sizeof_container(faces);
+        blockBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+        blockBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+        allocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+        if (vmaCreateBuffer(allocator, &blockBufferInfo, &allocInfo, &blockBuffer, &blockAlloc, nullptr) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to create block buffer");
+        }
+
         VkBuffer stagingBuffer;
         VmaAllocation stagingAlloc;
         uint32_t stagingSize = 1024 * 1024;
@@ -1067,6 +1089,7 @@ public:
 
         uploadData(vertexBuffer, vertices.data(), sizeof_container(vertices));
         uploadData(indexBuffer, indices.data(), sizeof_container(indices));
+        uploadData(blockBuffer, faces.data(), sizeof_container(faces));
 
         vkDestroyBuffer(device, stagingBuffer, nullptr);
         vmaFreeMemory(allocator, stagingAlloc);
@@ -1214,6 +1237,8 @@ public:
 
         vkDeviceWaitIdle(device);
 
+        vkDestroyBuffer(device, blockBuffer, nullptr);
+        vmaFreeMemory(allocator, blockAlloc);
         vkDestroyBuffer(device, indexBuffer, nullptr);
         vmaFreeMemory(allocator, indexAlloc);
         vkDestroyBuffer(device, vertexBuffer, nullptr);
