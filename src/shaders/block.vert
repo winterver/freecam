@@ -37,6 +37,11 @@ const vec2 uvs[6] = {
 };
 
 void main() {
-    gl_Position = MVP * vec4(position.xyz+vertices[faces[position.w][gl_VertexIndex]], 1.0);
-    texCoord = uvs[gl_VertexIndex];
+    int face = gl_VertexIndex / 6;
+    int index = gl_VertexIndex % 6;
+    if (!bool(position.w & (1 << face))) {
+        return;
+    }
+    gl_Position = MVP * vec4(position.xyz+vertices[faces[face][index]], 1.0);
+    texCoord = uvs[index];
 }

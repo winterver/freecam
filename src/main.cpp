@@ -124,7 +124,7 @@ public:
 
         int fbWdith, fbHeight;
         glfwGetFramebufferSize(window, &fbWdith, &fbHeight);
-        glm::mat4 projection = glm::perspective(glm::radians(fov), (float)fbWdith/fbHeight, 0.1f, 100.0f);
+        glm::mat4 projection = glm::perspective(glm::radians(fov), (float)fbWdith/fbHeight, 0.1f, 1000.0f);
         glm::mat4 view       = glm::lookAt(position, position + direction, glm::vec3(0, 1, 0));
         projection[1][1] *= -1; // the Y axis of the whole world will be flipped as long as projection matrix is used.
 
@@ -175,7 +175,7 @@ private:
     int indexCount;
     VkBuffer blockBuffer;
     VmaAllocation blockAlloc;
-    int faceCount;
+    int blockCount;
 
     VkCommandPool commandPool;
     VkCommandBuffer commandBuffer;
@@ -1006,20 +1006,18 @@ public:
             throw std::runtime_error("Failed to create index buffer");
         }
 
-        const std::vector<glm::ivec4> faces = {
-            { 0, 0, 0, 0 },
-            { 0, 0, 0, 1 },
-            { 0, 0, 0, 2 },
-            { 0, 0, 0, 3 },
-            { 0, 0, 0, 4 },
-            { 0, 0, 0, 5 },
-        };
+        std::vector<glm::ivec4> blocks;
+        for (int z = 0; z < 100; z++) {
+        for (int y = 0; y < 100; y++) {
+        for (int x = 0; x < 100; x++) {
+            blocks.push_back(glm::ivec4(x, y, z, 0b111111));
+        } } }
 
-        faceCount = (int)faces.size();
+        blockCount = (int)blocks.size();
 
         VkBufferCreateInfo blockBufferInfo{};
         blockBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        blockBufferInfo.size = sizeof_container(faces);
+        blockBufferInfo.size = sizeof_container(blocks);
         blockBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
         blockBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
@@ -1092,7 +1090,7 @@ public:
 
         uploadData(vertexBuffer, vertices.data(), sizeof_container(vertices));
         uploadData(indexBuffer, indices.data(), sizeof_container(indices));
-        uploadData(blockBuffer, faces.data(), sizeof_container(faces));
+        uploadData(blockBuffer, blocks.data(), sizeof_container(blocks));
 
         vkDestroyBuffer(device, stagingBuffer, nullptr);
         vmaFreeMemory(allocator, stagingAlloc);
@@ -1186,7 +1184,7 @@ public:
             VkDeviceSize blockOffsets[] = { 0 };
             vkCmdBindVertexBuffers(commandBuffer, 0, 1, blockBuffers, blockOffsets);
 
-            vkCmdDraw(commandBuffer, 6, faceCount, 0, 0);
+            vkCmdDraw(commandBuffer, 36, blockCount, 0, 0);
 
         vkCmdEndRenderPass(commandBuffer);
 
