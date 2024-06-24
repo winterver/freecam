@@ -32,27 +32,6 @@ struct Vertex
     glm::vec3 position;
     glm::vec3 color;
 
-    static std::array<VkVertexInputBindingDescription, 1> getBindingDescription() {
-        std::array<VkVertexInputBindingDescription, 1> bindingDescription{};
-        bindingDescription[0].binding = 0;
-        bindingDescription[0].stride = sizeof(Vertex);
-        bindingDescription[0].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-        return bindingDescription;
-    }
-
-    static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescriptions() {
-        std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions{};
-        attributeDescriptions[0].binding = 0;
-        attributeDescriptions[0].location = 0;
-        attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
-        attributeDescriptions[0].offset = offsetof(Vertex, position);
-        attributeDescriptions[1].binding = 0;
-        attributeDescriptions[1].location = 1;
-        attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-        attributeDescriptions[1].offset = offsetof(Vertex, color);
-        return attributeDescriptions;
-    }
-
     bool operator==(const Vertex& other) const {
         return position == other.position && color == other.color;
     }
@@ -451,6 +430,7 @@ public:
         }
 
         VkPhysicalDeviceFeatures deviceFeatures{};
+        //deviceFeatures.fillModeNonSolid = VK_TRUE;
 
         VkDeviceCreateInfo deviceInfo{};
         deviceInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -703,14 +683,31 @@ public:
         const std::vector<VkDynamicState> dynamicStates = {
             VK_DYNAMIC_STATE_VIEWPORT,
             VK_DYNAMIC_STATE_SCISSOR,
+            //VK_DYNAMIC_STATE_VERTEX_INPUT_EXT,
         };
         VkPipelineDynamicStateCreateInfo dynamicStateInfo{};
         dynamicStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
         dynamicStateInfo.dynamicStateCount = (uint32_t)dynamicStates.size();
         dynamicStateInfo.pDynamicStates = dynamicStates.data();
 
-        auto bindingDescription = Vertex::getBindingDescription();
-        auto attributeDescriptions = Vertex::getAttributeDescriptions();
+        std::array<VkVertexInputBindingDescription, 1> bindingDescription{};
+        bindingDescription[0].binding = 0;
+        bindingDescription[0].stride = sizeof(Vertex);
+        bindingDescription[0].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+        //bindingDescription[1].binding = 1;
+        //bindingDescription[1].stride = sizeof(glm::vec3);
+        //bindingDescription[1].inputRate = VK_VERTEX_INPUT_RATE_INSTANCE;
+
+        std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions{};
+        attributeDescriptions[0].binding = 0;
+        attributeDescriptions[0].location = 0;
+        attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
+        attributeDescriptions[0].offset = offsetof(Vertex, position);
+        attributeDescriptions[1].binding = 0;
+        attributeDescriptions[1].location = 1;
+        attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+        attributeDescriptions[1].offset = offsetof(Vertex, color);
+
         VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
         vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
         vertexInputInfo.vertexBindingDescriptionCount = (uint32_t)bindingDescription.size();
@@ -733,6 +730,7 @@ public:
         rasterizerInfo.depthClampEnable = VK_FALSE;
         rasterizerInfo.rasterizerDiscardEnable = VK_FALSE;
         rasterizerInfo.polygonMode = VK_POLYGON_MODE_FILL;
+        //rasterizerInfo.polygonMode = VK_POLYGON_MODE_LINE;
         rasterizerInfo.lineWidth = 1.0f;
         rasterizerInfo.cullMode = VK_CULL_MODE_BACK_BIT;
         rasterizerInfo.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE; // through vulkan recommends clockwise, but counter is more common.
