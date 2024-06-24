@@ -1,0 +1,8 @@
+1.Find why the model is properly drawn: In Vulkan, front faces are
+  clockwise-ly drawn, while tiny_obj_loader loads models counter-
+  clockwise-ly. The model shouldn't have been drawn properly.
+=>Still don't know why. But I made flipped Y axis and uses counter-
+  clockwise to make it compatible with OpenGL.
+2.High CPU and GPU usage. 4% CPU and 15% GPU just for a single tri-
+  angle at 60 FPS. When vsync disabled, 100% GPU, 390 FPS, while
+  60*(100/15) ~= 400!

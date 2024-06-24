@@ -96,7 +96,7 @@ public:
         lastY = currentY;
 
         horizontal -= float(mouseSpeed * dx);
-        vertical   += float(mouseSpeed * dy);
+        vertical   -= float(mouseSpeed * dy);
         horizontal = glm::mod(horizontal, glm::two_pi<float>());
         vertical = glm::clamp(vertical, -1.57f, 1.57f);
 
@@ -118,7 +118,7 @@ public:
             cos(horizontal - glm::half_pi<float>())
         );
 
-        glm::vec3 up = glm::vec3(0, -1, 0);
+        glm::vec3 up = glm::vec3(0, 1, 0);
 
         glm::vec3 velocity{};
         if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS){
@@ -147,6 +147,7 @@ public:
         glfwGetFramebufferSize(window, &fbWdith, &fbHeight);
         glm::mat4 projection = glm::perspective(glm::radians(fov), (float)fbWdith/fbHeight, 0.1f, 100.0f);
         glm::mat4 view       = glm::lookAt(position, position + direction, glm::vec3(0, 1, 0));
+        projection[1][1] *= -1; // the Y axis of the whole world will be flipped as long as projection matrix is used.
 
         return projection * view;
     }
@@ -734,7 +735,7 @@ public:
         rasterizerInfo.polygonMode = VK_POLYGON_MODE_FILL;
         rasterizerInfo.lineWidth = 1.0f;
         rasterizerInfo.cullMode = VK_CULL_MODE_BACK_BIT;
-        rasterizerInfo.frontFace = VK_FRONT_FACE_CLOCKWISE;
+        rasterizerInfo.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE; // through vulkan recommends clockwise, but counter is more common.
         rasterizerInfo.depthBiasEnable = VK_FALSE;
 
         VkPipelineMultisampleStateCreateInfo multisamplingInfo{};
@@ -1170,8 +1171,7 @@ int main()
     glfwInit();
     glfwDefaultWindowHints();
     glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
-    // do not create a default OpenGL context
-    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API); // do not create a default OpenGL context
 
     GLFWwindow* window;
     window = glfwCreateWindow(1600, 900, "Freecam", nullptr, nullptr);
