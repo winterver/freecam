@@ -175,6 +175,7 @@ private:
     int indexCount;
     VkBuffer blockBuffer;
     VmaAllocation blockAlloc;
+    int faceCount;
 
     VkCommandPool commandPool;
     VkCommandBuffer commandBuffer;
@@ -1014,10 +1015,12 @@ public:
             { 0, 0, 0, 5 },
         };
 
+        faceCount = (int)faces.size();
+
         VkBufferCreateInfo blockBufferInfo{};
         blockBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
         blockBufferInfo.size = sizeof_container(faces);
-        blockBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+        blockBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
         blockBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
         allocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
@@ -1145,8 +1148,6 @@ public:
 
         vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
-
             VkViewport viewport{};
             viewport.x = 0.0f;
             viewport.y = 0.0f;
@@ -1162,16 +1163,30 @@ public:
             vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
             glm::mat4 model = glm::rotate((float)glfwGetTime(), glm::vec3(0.0f, 1.0f, 0.0f));
-            glm::mat4 MVP = camera.update(window) * model;
+            glm::mat4 projectionView = camera.update(window);
+            glm::mat4 MVP = projectionView * model;
             vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4), &MVP[0][0]);
 
+            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
+
             VkBuffer vertexBuffers[] = { vertexBuffer };
-            VkDeviceSize offsets[] = { 0 };
-            vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+            VkDeviceSize vertexOffsets[] = { 0 };
+            vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, vertexOffsets);
 
             vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
             vkCmdDrawIndexed(commandBuffer, indexCount, 1, 0, 0, 0);
+
+
+            vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4), &projectionView[0][0]);
+
+            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, blockPipeline);
+
+            VkBuffer blockBuffers[] = { blockBuffer };
+            VkDeviceSize blockOffsets[] = { 0 };
+            vkCmdBindVertexBuffers(commandBuffer, 0, 1, blockBuffers, blockOffsets);
+
+            vkCmdDraw(commandBuffer, 6, faceCount, 0, 0);
 
         vkCmdEndRenderPass(commandBuffer);
 
