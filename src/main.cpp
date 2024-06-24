@@ -164,6 +164,7 @@ private:
     VkRenderPass renderPass;
     VkPipelineLayout pipelineLayout;
     VkPipeline graphicsPipeline;
+    VkPipeline blockPipeline;
 
     std::vector<VkFramebuffer> swapchainFramebuffers;
 
@@ -647,39 +648,6 @@ public:
             throw std::runtime_error("Failed to create render pass");
         }
 
-        VkShaderModule vertShaderModule;
-        VkShaderModule fragShaderModule;
-        {
-            VkShaderModuleCreateInfo shaderModuleInfo{};
-            shaderModuleInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-
-            shaderModuleInfo.codeSize = shader_vert_size;
-            shaderModuleInfo.pCode = shader_vert_code;
-            if (vkCreateShaderModule(device, &shaderModuleInfo, nullptr, &vertShaderModule) != VK_SUCCESS) {
-                throw std::runtime_error("Failed to create vertex shader module");
-            }
-
-            shaderModuleInfo.codeSize = shader_frag_size;
-            shaderModuleInfo.pCode = shader_frag_code;
-            if (vkCreateShaderModule(device, &shaderModuleInfo, nullptr, &fragShaderModule) != VK_SUCCESS) {
-                throw std::runtime_error("Failed to create fragment shader module");
-            }
-        }
-
-        VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
-        vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
-        vertShaderStageInfo.module = vertShaderModule;
-        vertShaderStageInfo.pName = "main";
-
-        VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
-        fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-        fragShaderStageInfo.module = fragShaderModule;
-        fragShaderStageInfo.pName = "main";
-
-        VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
-
         const std::vector<VkDynamicState> dynamicStates = {
             VK_DYNAMIC_STATE_VIEWPORT,
             VK_DYNAMIC_STATE_SCISSOR,
@@ -689,31 +657,6 @@ public:
         dynamicStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
         dynamicStateInfo.dynamicStateCount = (uint32_t)dynamicStates.size();
         dynamicStateInfo.pDynamicStates = dynamicStates.data();
-
-        std::array<VkVertexInputBindingDescription, 1> bindingDescription{};
-        bindingDescription[0].binding = 0;
-        bindingDescription[0].stride = sizeof(Vertex);
-        bindingDescription[0].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-        //bindingDescription[1].binding = 1;
-        //bindingDescription[1].stride = sizeof(glm::vec3);
-        //bindingDescription[1].inputRate = VK_VERTEX_INPUT_RATE_INSTANCE;
-
-        std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions{};
-        attributeDescriptions[0].binding = 0;
-        attributeDescriptions[0].location = 0;
-        attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
-        attributeDescriptions[0].offset = offsetof(Vertex, position);
-        attributeDescriptions[1].binding = 0;
-        attributeDescriptions[1].location = 1;
-        attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-        attributeDescriptions[1].offset = offsetof(Vertex, color);
-
-        VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
-        vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-        vertexInputInfo.vertexBindingDescriptionCount = (uint32_t)bindingDescription.size();
-        vertexInputInfo.pVertexBindingDescriptions = bindingDescription.data();
-        vertexInputInfo.vertexAttributeDescriptionCount = (uint32_t)attributeDescriptions.size();
-        vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
 
         VkPipelineInputAssemblyStateCreateInfo inputAssemblyInfo{};
         inputAssemblyInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -778,29 +721,165 @@ public:
             throw std::runtime_error("Failed to create pipeline layout");
         }
 
-        VkGraphicsPipelineCreateInfo pipelineInfo{};
-        pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-        pipelineInfo.stageCount = 2;
-        pipelineInfo.pStages = shaderStages;
-        pipelineInfo.pVertexInputState = &vertexInputInfo;
-        pipelineInfo.pInputAssemblyState = &inputAssemblyInfo;
-        pipelineInfo.pViewportState = &viewportStateInfo;
-        pipelineInfo.pRasterizationState = &rasterizerInfo;
-        pipelineInfo.pMultisampleState = &multisamplingInfo;
-        pipelineInfo.pDepthStencilState = &depthStencilInfo;
-        pipelineInfo.pColorBlendState = &colorBlendInfo;
-        pipelineInfo.pDynamicState = &dynamicStateInfo;
-        pipelineInfo.layout = pipelineLayout;
-        pipelineInfo.renderPass = renderPass;
-        pipelineInfo.subpass = 0;
-        pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
+        // graphics pipeline
+        {
+            VkShaderModule vertShaderModule;
+            VkShaderModule fragShaderModule;
+            {
+                VkShaderModuleCreateInfo shaderModuleInfo{};
+                shaderModuleInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
 
-        if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline) != VK_SUCCESS) {
-            throw std::runtime_error("Failed to create graphics pipeline");
+                shaderModuleInfo.codeSize = shader_vert_size;
+                shaderModuleInfo.pCode = shader_vert_code;
+                if (vkCreateShaderModule(device, &shaderModuleInfo, nullptr, &vertShaderModule) != VK_SUCCESS) {
+                    throw std::runtime_error("Failed to create vertex shader module");
+                }
+
+                shaderModuleInfo.codeSize = shader_frag_size;
+                shaderModuleInfo.pCode = shader_frag_code;
+                if (vkCreateShaderModule(device, &shaderModuleInfo, nullptr, &fragShaderModule) != VK_SUCCESS) {
+                    throw std::runtime_error("Failed to create fragment shader module");
+                }
+            }
+
+            std::array<VkVertexInputBindingDescription, 1> bindingDescription{};
+            bindingDescription[0].binding = 0;
+            bindingDescription[0].stride = sizeof(Vertex);
+            bindingDescription[0].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+            std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions{};
+            attributeDescriptions[0].binding = 0;
+            attributeDescriptions[0].location = 0;
+            attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
+            attributeDescriptions[0].offset = offsetof(Vertex, position);
+            attributeDescriptions[1].binding = 0;
+            attributeDescriptions[1].location = 1;
+            attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+            attributeDescriptions[1].offset = offsetof(Vertex, color);
+
+            VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
+            vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+            vertexInputInfo.vertexBindingDescriptionCount = (uint32_t)bindingDescription.size();
+            vertexInputInfo.pVertexBindingDescriptions = bindingDescription.data();
+            vertexInputInfo.vertexAttributeDescriptionCount = (uint32_t)attributeDescriptions.size();
+            vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
+
+            VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
+            vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+            vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+            vertShaderStageInfo.module = vertShaderModule;
+            vertShaderStageInfo.pName = "main";
+
+            VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
+            fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+            fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+            fragShaderStageInfo.module = fragShaderModule;
+            fragShaderStageInfo.pName = "main";
+
+            VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
+
+            VkGraphicsPipelineCreateInfo pipelineInfo{};
+            pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+            pipelineInfo.stageCount = 2;
+            pipelineInfo.pStages = shaderStages;
+            pipelineInfo.pVertexInputState = &vertexInputInfo;
+            pipelineInfo.pInputAssemblyState = &inputAssemblyInfo;
+            pipelineInfo.pViewportState = &viewportStateInfo;
+            pipelineInfo.pRasterizationState = &rasterizerInfo;
+            pipelineInfo.pMultisampleState = &multisamplingInfo;
+            pipelineInfo.pDepthStencilState = &depthStencilInfo;
+            pipelineInfo.pColorBlendState = &colorBlendInfo;
+            pipelineInfo.pDynamicState = &dynamicStateInfo;
+            pipelineInfo.layout = pipelineLayout;
+            pipelineInfo.renderPass = renderPass;
+            pipelineInfo.subpass = 0;
+            pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
+
+            if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline) != VK_SUCCESS) {
+                throw std::runtime_error("Failed to create graphics pipeline");
+            }
+
+            vkDestroyShaderModule(device, fragShaderModule, nullptr);
+            vkDestroyShaderModule(device, vertShaderModule, nullptr);
         }
 
-        vkDestroyShaderModule(device, fragShaderModule, nullptr);
-        vkDestroyShaderModule(device, vertShaderModule, nullptr);
+        // block pipeline
+        {
+            VkShaderModule vertShaderModule;
+            VkShaderModule fragShaderModule;
+            {
+                VkShaderModuleCreateInfo shaderModuleInfo{};
+                shaderModuleInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+
+                shaderModuleInfo.codeSize = block_vert_size;
+                shaderModuleInfo.pCode = block_vert_code;
+                if (vkCreateShaderModule(device, &shaderModuleInfo, nullptr, &vertShaderModule) != VK_SUCCESS) {
+                    throw std::runtime_error("Failed to create vertex shader module");
+                }
+
+                shaderModuleInfo.codeSize = block_frag_size;
+                shaderModuleInfo.pCode = block_frag_code;
+                if (vkCreateShaderModule(device, &shaderModuleInfo, nullptr, &fragShaderModule) != VK_SUCCESS) {
+                    throw std::runtime_error("Failed to create fragment shader module");
+                }
+            }
+
+            VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
+            vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+            vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+            vertShaderStageInfo.module = vertShaderModule;
+            vertShaderStageInfo.pName = "main";
+
+            VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
+            fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+            fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+            fragShaderStageInfo.module = fragShaderModule;
+            fragShaderStageInfo.pName = "main";
+
+            VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
+
+            std::array<VkVertexInputBindingDescription, 1> bindingDescription{};
+            bindingDescription[0].binding = 0;
+            bindingDescription[0].stride = sizeof(glm::ivec4);
+            bindingDescription[0].inputRate = VK_VERTEX_INPUT_RATE_INSTANCE;
+
+            std::array<VkVertexInputAttributeDescription, 1> attributeDescriptions{};
+            attributeDescriptions[0].binding = 0;
+            attributeDescriptions[0].location = 0;
+            attributeDescriptions[0].format = VK_FORMAT_R32G32B32A32_SINT;
+            attributeDescriptions[0].offset = 0;
+
+            VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
+            vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+            vertexInputInfo.vertexBindingDescriptionCount = (uint32_t)bindingDescription.size();
+            vertexInputInfo.pVertexBindingDescriptions = bindingDescription.data();
+            vertexInputInfo.vertexAttributeDescriptionCount = (uint32_t)attributeDescriptions.size();
+            vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
+
+            VkGraphicsPipelineCreateInfo pipelineInfo{};
+            pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+            pipelineInfo.stageCount = 2;
+            pipelineInfo.pStages = shaderStages;
+            pipelineInfo.pVertexInputState = &vertexInputInfo;
+            pipelineInfo.pInputAssemblyState = &inputAssemblyInfo;
+            pipelineInfo.pViewportState = &viewportStateInfo;
+            pipelineInfo.pRasterizationState = &rasterizerInfo;
+            pipelineInfo.pMultisampleState = &multisamplingInfo;
+            pipelineInfo.pDepthStencilState = &depthStencilInfo;
+            pipelineInfo.pColorBlendState = &colorBlendInfo;
+            pipelineInfo.pDynamicState = &dynamicStateInfo;
+            pipelineInfo.layout = pipelineLayout;
+            pipelineInfo.renderPass = renderPass;
+            pipelineInfo.subpass = 0;
+            pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
+
+            if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &blockPipeline) != VK_SUCCESS) {
+                throw std::runtime_error("Failed to create block pipeline");
+            }
+
+            vkDestroyShaderModule(device, fragShaderModule, nullptr);
+            vkDestroyShaderModule(device, vertShaderModule, nullptr);
+        }
     }
 
     void createFramebuffers()
@@ -1146,6 +1225,7 @@ public:
         for (auto framebuffer : swapchainFramebuffers) {
             vkDestroyFramebuffer(device, framebuffer, nullptr);
         }
+        vkDestroyPipeline(device, blockPipeline, nullptr);
         vkDestroyPipeline(device, graphicsPipeline, nullptr);
         vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
         vkDestroyRenderPass(device, renderPass, nullptr);

@@ -37,6 +37,7 @@ add_spirv_modules(compile_shaders
                   BINARY_DIR shaders
                   SOURCE_DIR src/shaders
                   SOURCES    shader.vert shader.frag
+                             block.vert  block.frag
                   OPTIONS    -O)
 
 add_custom_target(embed_shaders
