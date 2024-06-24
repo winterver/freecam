@@ -27,6 +27,53 @@ uint32_t sizeof_container(T container)
     return uint32_t(sizeof(container[0]) * container.size());
 }
 
+// edited from https://www.shadertoy.com/view/4tGSzW
+
+glm::vec2 perlin_grad(glm::vec2 p, float s) {
+    float theta = std::hash<glm::vec3>{}(glm::vec3(p, s)) / 1000.0f;
+    return glm::vec2(glm::cos(theta), glm::sin(theta));
+}
+
+float perlin_fade(float t) {
+    return t*t*t*(t*(t*6.0f - 15.0f) + 10.0f);
+}
+
+float perlin_noise(float x, float y, float s) {
+    /* Calculate lattice points. */
+    glm::vec2 p(x, y);
+    glm::vec2 p0 = floor(p);
+    glm::vec2 p1 = p0 + glm::vec2(1.0f, 0.0f);
+    glm::vec2 p2 = p0 + glm::vec2(0.0f, 1.0f);
+    glm::vec2 p3 = p0 + glm::vec2(1.0f, 1.0f);
+
+    /* Look up gradients at lattice points. */
+    glm::vec2 g0 = perlin_grad(p0, s);
+    glm::vec2 g1 = perlin_grad(p1, s);
+    glm::vec2 g2 = perlin_grad(p2, s);
+    glm::vec2 g3 = perlin_grad(p3, s);
+
+    float t0 = p.x - p0.x;
+    float fade_t0 = perlin_fade(t0); /* Used for interpolation in horizontal direction */
+
+    float t1 = p.y - p0.y;
+    float fade_t1 = perlin_fade(t1); /* Used for interpolation in vertical direction. */
+
+    /* Calculate dot products and interpolate.*/
+    float p0p1 = (1.0f - fade_t0) * dot(g0, (p - p0)) + fade_t0 * dot(g1, (p - p1)); /* between upper two lattice points */
+    float p2p3 = (1.0f - fade_t0) * dot(g2, (p - p2)) + fade_t0 * dot(g3, (p - p3)); /* between lower two lattice points */
+
+    /* Calculate final result */
+    return (1.0f - fade_t1) * p0p1 + fade_t1 * p2p3;
+}
+
+float fractal_perlin_noise(float x, float y, float s)
+{
+    return (perlin_noise(x/64, y/64, s) * 1.0f +
+        perlin_noise(x/32, y/32, s) * 0.5f +
+        perlin_noise(x/16, y/16, s) * 0.25f +
+        perlin_noise(x/8, y/8, s) * 0.125f) / 1.875f * 0.5f + 0.5f;
+}
+
 struct Vertex
 {
     glm::vec3 position;
@@ -80,19 +127,19 @@ public:
         vertical = glm::clamp(vertical, -1.57f, 1.57f);
 
         glm::vec3 direction(
-            cos(vertical) * sin(horizontal), 
+            cos(vertical) * sin(horizontal),
             sin(vertical),
             cos(vertical) * cos(horizontal)
         );
 
         glm::vec3 forward(
-            sin(horizontal), 
+            sin(horizontal),
             0,
             cos(horizontal)
         );
-        
+
         glm::vec3 right(
-            sin(horizontal - glm::half_pi<float>()), 
+            sin(horizontal - glm::half_pi<float>()),
             0,
             cos(horizontal - glm::half_pi<float>())
         );
@@ -149,7 +196,7 @@ private:
     VkDevice device;
     VkQueue graphicsQueue;
     VkQueue presentQueue;
-    VmaAllocator allocator; 
+    VmaAllocator allocator;
 
     VkSwapchainKHR swapchain;
     VkFormat swapchainImageFormat;
@@ -296,7 +343,7 @@ public:
 
         if (glfwCreateWindowSurface(instance, window, nullptr, &surface) != VK_SUCCESS) {
             throw std::runtime_error("Failed to create window surface");
-        } 
+        }
 
         findGPU();
         createDevice();
@@ -1114,7 +1161,7 @@ public:
         vmaFreeMemory(allocator, depthImageAlloc);
         for (auto imageView : swapchainImageViews) {
             vkDestroyImageView(device, imageView, nullptr);
-        } 
+        }
         vkDestroySwapchainKHR(device, swapchain, nullptr);
 
         createSwapchain();
@@ -1284,6 +1331,13 @@ public:
 
 int main()
 {
+    for (float y = 0; y < 64; y++) {
+        for (float x = 0; x < 64; x++) {
+            printf("%d ", int(10*fractal_perlin_noise(x, y, 985678)));
+        }
+        putchar('\n');
+    }
+
     glfwInit();
     glfwDefaultWindowHints();
     glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);

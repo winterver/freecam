@@ -18,13 +18,13 @@ const vec3 vertices[8] = {
     vec3(1, 1, 1),
 };
 
-const int faces[6][6] = {
-    { 5, 1, 3, 5, 3, 7 }, // +x
-    { 0, 4, 6, 0, 6, 2 }, // -x
-    { 4, 5, 7, 4, 7, 6 }, // +z
-    { 1, 0, 2, 1, 2, 3 }, // -z
-    { 6, 7, 3, 6, 3, 2 }, // +y
-    { 0, 1, 5, 0, 5, 4 }, // -y
+const int faces[36] = {
+    5, 1, 3, 5, 3, 7, // +x
+    0, 4, 6, 0, 6, 2, // -x
+    4, 5, 7, 4, 7, 6, // +z
+    1, 0, 2, 1, 2, 3, // -z
+    6, 7, 3, 6, 3, 2, // +y
+    0, 1, 5, 0, 5, 4, // -y
 };
 
 const vec2 uvs[6] = {
@@ -37,11 +37,9 @@ const vec2 uvs[6] = {
 };
 
 void main() {
-    int face = gl_VertexIndex / 6;
-    int index = gl_VertexIndex % 6;
-    if (!bool(position.w & (1 << face))) {
+    if (!bool(position.w & (1 << (gl_VertexIndex/6)))) {
         return;
     }
-    gl_Position = MVP * vec4(position.xyz+vertices[faces[face][index]], 1.0);
-    texCoord = uvs[index];
+    gl_Position = MVP * vec4(position.xyz + vertices[faces[gl_VertexIndex]], 1.0);
+    texCoord = uvs[gl_VertexIndex % 6];
 }
