@@ -27,53 +27,6 @@ uint32_t sizeof_container(T container)
     return uint32_t(sizeof(container[0]) * container.size());
 }
 
-// edited from https://www.shadertoy.com/view/4tGSzW
-
-glm::vec2 perlin_grad(glm::vec2 p, float s) {
-    float theta = std::hash<glm::vec3>{}(glm::vec3(p, s)) / 1000.0f;
-    return glm::vec2(glm::cos(theta), glm::sin(theta));
-}
-
-float perlin_fade(float t) {
-    return t*t*t*(t*(t*6.0f - 15.0f) + 10.0f);
-}
-
-float perlin_noise(float x, float y, float s) {
-    /* Calculate lattice points. */
-    glm::vec2 p(x, y);
-    glm::vec2 p0 = floor(p);
-    glm::vec2 p1 = p0 + glm::vec2(1.0f, 0.0f);
-    glm::vec2 p2 = p0 + glm::vec2(0.0f, 1.0f);
-    glm::vec2 p3 = p0 + glm::vec2(1.0f, 1.0f);
-
-    /* Look up gradients at lattice points. */
-    glm::vec2 g0 = perlin_grad(p0, s);
-    glm::vec2 g1 = perlin_grad(p1, s);
-    glm::vec2 g2 = perlin_grad(p2, s);
-    glm::vec2 g3 = perlin_grad(p3, s);
-
-    float t0 = p.x - p0.x;
-    float fade_t0 = perlin_fade(t0); /* Used for interpolation in horizontal direction */
-
-    float t1 = p.y - p0.y;
-    float fade_t1 = perlin_fade(t1); /* Used for interpolation in vertical direction. */
-
-    /* Calculate dot products and interpolate.*/
-    float p0p1 = (1.0f - fade_t0) * dot(g0, (p - p0)) + fade_t0 * dot(g1, (p - p1)); /* between upper two lattice points */
-    float p2p3 = (1.0f - fade_t0) * dot(g2, (p - p2)) + fade_t0 * dot(g3, (p - p3)); /* between lower two lattice points */
-
-    /* Calculate final result */
-    return (1.0f - fade_t1) * p0p1 + fade_t1 * p2p3;
-}
-
-float fractal_perlin_noise(float x, float y, float s)
-{
-    return (perlin_noise(x/64, y/64, s) * 1.0f +
-        perlin_noise(x/32, y/32, s) * 0.5f +
-        perlin_noise(x/16, y/16, s) * 0.25f +
-        perlin_noise(x/8, y/8, s) * 0.125f) / 1.875f * 0.5f + 0.5f;
-}
-
 struct Vertex
 {
     glm::vec3 position;
@@ -91,6 +44,52 @@ namespace std {
         }
     };
 }
+
+namespace _ {
+    using namespace glm;
+
+    // edited from https://www.shadertoy.com/view/XlGcRh
+    vec2 grad(vec2 p2, int seed)
+    {
+        vec3 p3 = vec3(p2, seed);
+        p3 = fract(p3 * vec3(0.1031f, 0.1030f, 0.0973f));
+        vec3 yzx = vec3(p3.y, p3.z, p3.x);
+        p3 += dot(p3, yzx+33.33f);
+        vec2 xx = vec2(p3.x, p3.x);
+        vec2 yz = vec2(p3.y, p3.z);
+        vec2 zy = vec2(p3.z, p3.y);
+        return fract((xx+yz)*zy) * 2.0f - 1.0f;
+    }
+
+    // from https://godotshaders.com/snippet/2d-noise/
+    // return value range [0, 1]
+    float noise(vec2 uv, int seed = 1337) {
+        vec2 uv_index = floor(uv);
+        vec2 uv_fract = fract(uv);
+
+        vec2 blur = smoothstep(0.0f, 1.0f, uv_fract);
+
+        return mix( mix( dot( grad( uv_index + vec2(0.0f,0.0f), seed ), uv_fract - vec2(0.0f,0.0f) ),
+                         dot( grad( uv_index + vec2(1.0f,0.0f), seed ), uv_fract - vec2(1.0f,0.0f) ), blur.x),
+                    mix( dot( grad( uv_index + vec2(0.0f,1.0f), seed ), uv_fract - vec2(0.0f,1.0f) ),
+                         dot( grad( uv_index + vec2(1.0f,1.0f), seed ), uv_fract - vec2(1.0f,1.0f) ), blur.x), blur.y) + 0.5f;
+    }
+
+    // edited from https://godotshaders.com/snippet/fractal-brownian-motion-fbm/
+    // note to call fbm() like fbm(pos/64.0f), or the result may not be what you expect
+    float fbm(vec2 uv, int seed = 1337, int octaves = 6, float amplitude = 0.5f, float gain = 0.5f, float frequency = 1.0f, float lacunarity = 2.0f) {
+        float value = 0.0f;
+        for(int i = 0; i < octaves; i++) {
+            value += amplitude * noise(uv * frequency, seed);
+            frequency *= lacunarity;
+            amplitude *= gain;
+        }
+        return value;
+    }
+}
+
+using _::noise;
+using _::fbm;
 
 class Camera
 {
@@ -1055,11 +1054,9 @@ public:
 
         std::vector<glm::ivec4> blocks;
         for (int z = 0; z < 100; z++) {
-        for (int y = 0; y < 100; y++) {
         for (int x = 0; x < 100; x++) {
-            blocks.push_back(glm::ivec4(x, y, z, 0b111111));
-        } } }
-
+            blocks.push_back(glm::ivec4(x, 0, z, 0b111111));
+        } }
         blockCount = (int)blocks.size();
 
         VkBufferCreateInfo blockBufferInfo{};
@@ -1331,13 +1328,6 @@ public:
 
 int main()
 {
-    for (float y = 0; y < 64; y++) {
-        for (float x = 0; x < 64; x++) {
-            printf("%d ", int(10*fractal_perlin_noise(x, y, 985678)));
-        }
-        putchar('\n');
-    }
-
     glfwInit();
     glfwDefaultWindowHints();
     glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
