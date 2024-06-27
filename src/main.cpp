@@ -894,11 +894,15 @@ public:
             bindingDescription[0].stride = sizeof(glm::ivec4);
             bindingDescription[0].inputRate = VK_VERTEX_INPUT_RATE_INSTANCE;
 
-            std::array<VkVertexInputAttributeDescription, 1> attributeDescriptions{};
+            std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions{};
             attributeDescriptions[0].binding = 0;
             attributeDescriptions[0].location = 0;
-            attributeDescriptions[0].format = VK_FORMAT_R32G32B32A32_SINT;
+            attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SINT;
             attributeDescriptions[0].offset = 0;
+            attributeDescriptions[1].binding = 0;
+            attributeDescriptions[1].location = 1;
+            attributeDescriptions[1].format = VK_FORMAT_R32_SINT;
+            attributeDescriptions[1].offset = sizeof(glm::ivec3);
 
             VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
             vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;

@@ -1,12 +1,8 @@
 #version 450
 
-layout(location = 0) in vec3 fragColor;
-layout(location = 0) out vec4 outColor;
-
-layout(push_constant) uniform constants {
-    layout(offset = 64) vec3 viewPos;
-};
+layout(location = 0) in vec3 iVertColor;
+layout(location = 0) out vec4 FragColor;
 
 void main() {
-    outColor = vec4(fragColor, 1.0);
+    FragColor = vec4(iVertColor, 1.0);
 }
