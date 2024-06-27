@@ -1,7 +1,11 @@
 #version 450
 
 layout(location = 0) in ivec4 position;
-layout(location = 0) out vec2 texCoord;
+
+layout(location = 0) out vec2 oTexCoord;
+layout(location = 1) out vec3 oNormal;
+layout(location = 2) out vec3 oVertColor;
+layout(location = 3) out vec3 oPosition;
 
 layout(push_constant) uniform constants {
     mat4 MVP;
@@ -36,10 +40,29 @@ const vec2 uvs[6] = {
     vec2(0, 0),
 };
 
+const vec3 normals[6] = {
+    vec3(1, 0, 0),
+    vec3(-1, 0, 0),
+    vec3(0, 0, 1),
+    vec3(0, 0, -1),
+    vec3(0, 1, 0),
+    vec3(0, -1, 0),
+};
+
+vec3 hsv2rgb(vec3 c)
+{
+    vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+    vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+    return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+}
+
 void main() {
     if (!bool(position.w & (1 << (gl_VertexIndex/6)))) {
         return;
     }
     gl_Position = MVP * vec4(position.xyz + vertices[faces[gl_VertexIndex]], 1.0);
-    texCoord = uvs[gl_VertexIndex % 6];
+    oTexCoord = uvs[gl_VertexIndex % 6];
+    oNormal = normals[gl_VertexIndex / 6];
+    oVertColor = hsv2rgb(vec3(float(position.w>>8)/255.0f*0.7f+0.3f, 1.0, 0.3));
+    oPosition = position.xyz + vertices[faces[gl_VertexIndex]];
 }

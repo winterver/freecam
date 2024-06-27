@@ -93,15 +93,14 @@ using _::fbm;
 
 class Camera
 {
-private:
+public:
     float fov = 60.0f;
     float vertical = 0.0f;
     float horizontal = glm::pi<float>();
-    float speed = 3.0f;
+    float speed = 30.0f;
     float mouseSpeed = 0.002f;
     glm::vec3 position = glm::vec3(0.0f, 0.0f, 5.0f);
 
-public:
     glm::mat4 update(GLFWwindow* window)
     {
         static double lastTime = glfwGetTime();
@@ -756,10 +755,13 @@ public:
         colorBlendInfo.blendConstants[2] = 0.0f;
         colorBlendInfo.blendConstants[3] = 0.0f;
 
-        std::array<VkPushConstantRange, 1> pushConstantRanges{};
+        std::array<VkPushConstantRange, 2> pushConstantRanges{};
         pushConstantRanges[0].offset = 0;
         pushConstantRanges[0].size = sizeof(glm::mat4);
         pushConstantRanges[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        pushConstantRanges[1].offset = sizeof(glm::mat4);
+        pushConstantRanges[1].size = sizeof(glm::vec3);
+        pushConstantRanges[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
         VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
         pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -1053,9 +1055,12 @@ public:
         }
 
         std::vector<glm::ivec4> blocks;
-        for (int z = 0; z < 100; z++) {
-        for (int x = 0; x < 100; x++) {
-            blocks.push_back(glm::ivec4(x, 0, z, 0b111111));
+        for (int z = 0; z < 128; z++) {
+        for (int x = 0; x < 128; x++) {
+            float n = fbm(glm::vec2(x,z)/128.0f) * 32.0f;
+            float y = glm::round(n);
+            float h = glm::round(y/32.0f * 255.0f);
+            blocks.push_back(glm::ivec4(x, int(y), z, (int(h)<<8) + 0b111111));
         } }
         blockCount = (int)blocks.size();
 
@@ -1208,6 +1213,7 @@ public:
             glm::mat4 projectionView = camera.update(window);
             glm::mat4 MVP = projectionView * model;
             vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4), &MVP[0][0]);
+            vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(glm::mat4), sizeof(glm::vec3), &camera.position[0]);
 
             vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
 
@@ -1221,6 +1227,7 @@ public:
 
 
             vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4), &projectionView[0][0]);
+            vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(glm::mat4), sizeof(glm::vec3), &camera.position[0]);
 
             vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, blockPipeline);
 
