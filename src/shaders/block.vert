@@ -1,7 +1,7 @@
 #version 450
 
 layout(location = 0) in ivec3 iPosition;
-layout(location = 1) in int iFace;
+layout(location = 1) in int iFaceMask;
 
 layout(location = 0) out vec2 oTexCoord;
 layout(location = 1) out vec3 oNormal;
@@ -58,7 +58,7 @@ vec3 hsv2rgb(vec3 c)
 }
 
 void main() {
-    if (!bool(iFace & (1 << (gl_VertexIndex/6)))) {
+    if (!bool(iFaceMask & (1 << (gl_VertexIndex/6)))) {
         return;
     }
 
@@ -67,7 +67,7 @@ void main() {
 
     oTexCoord = uvs[gl_VertexIndex % 6];
     oNormal = normals[gl_VertexIndex / 6];
-    float H = float(iFace>>8)/255.0f;
+    float H = float(iFaceMask>>8)/255.0f;
     oVertColor = hsv2rgb(vec3(H, 1.0, 0.3));
     oPosition = position;
 }
