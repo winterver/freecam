@@ -171,7 +171,6 @@ public:
         glfwGetFramebufferSize(window, &fbWdith, &fbHeight);
         glm::mat4 projection = glm::perspective(glm::radians(fov), (float)fbWdith/fbHeight, 0.1f, 1000.0f);
         glm::mat4 view       = glm::lookAt(position, position + direction, glm::vec3(0, 1, 0));
-        projection[1][1] *= -1; // the Y axis of the whole world will be flipped as long as projection matrix is used.
 
         return projection * view;
     }
@@ -455,6 +454,7 @@ public:
 
         const std::vector<const char*> requiredExtensions = {
             "VK_KHR_swapchain",
+            "VK_KHR_maintenance1",
         };
 
         uint32_t extensionCount;
@@ -699,7 +699,6 @@ public:
         const std::vector<VkDynamicState> dynamicStates = {
             VK_DYNAMIC_STATE_VIEWPORT,
             VK_DYNAMIC_STATE_SCISSOR,
-            //VK_DYNAMIC_STATE_VERTEX_INPUT_EXT,
         };
         VkPipelineDynamicStateCreateInfo dynamicStateInfo{};
         dynamicStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
@@ -1201,9 +1200,9 @@ public:
 
             VkViewport viewport{};
             viewport.x = 0.0f;
-            viewport.y = 0.0f;
+            viewport.y = (float)swapchainExtent.height;
             viewport.width = (float)swapchainExtent.width;
-            viewport.height = (float)swapchainExtent.height;
+            viewport.height = -(float)swapchainExtent.height;
             viewport.minDepth = 0.0f;
             viewport.maxDepth = 1.0f;
             vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
@@ -1274,16 +1273,17 @@ public:
             vkResetCommandBuffer(commandBuffer, 0);
             recordCommandBuffer(commandBuffer, imageIndex);
 
-            VkSubmitInfo submitInfo{};
-            submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
             VkSemaphore waitSemaphores[] = { imageAvailableSemaphore };
             VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+            VkSemaphore signalSemaphores[] = { renderFinishedSemaphore };
+
+            VkSubmitInfo submitInfo{};
+            submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
             submitInfo.waitSemaphoreCount = 1;
             submitInfo.pWaitSemaphores = waitSemaphores;
             submitInfo.pWaitDstStageMask = waitStages;
             submitInfo.commandBufferCount = 1;
             submitInfo.pCommandBuffers = &commandBuffer;
-            VkSemaphore signalSemaphores[] = { renderFinishedSemaphore };
             submitInfo.signalSemaphoreCount = 1;
             submitInfo.pSignalSemaphores = signalSemaphores;
 
@@ -1291,11 +1291,12 @@ public:
                 throw std::runtime_error("Failed to submit draw command buffer");
             }
 
+            VkSwapchainKHR swapchains[] = { swapchain };
+
             VkPresentInfoKHR presentInfo{};
             presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
             presentInfo.waitSemaphoreCount = 1;
             presentInfo.pWaitSemaphores = signalSemaphores;
-            VkSwapchainKHR swapchains[] = { swapchain };
             presentInfo.swapchainCount = 1;
             presentInfo.pSwapchains = swapchains;
             presentInfo.pImageIndices = &imageIndex;
