@@ -1345,8 +1345,12 @@ int main()
     glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API); // do not create a default OpenGL context
 
-    GLFWwindow* window;
-    window = glfwCreateWindow(1600, 900, "Freecam", nullptr, nullptr);
+    constexpr int width = 1600, height = 900;
+    GLFWwindow* window = glfwCreateWindow(width, height, "Freecam", nullptr, nullptr);
+
+    GLFWmonitor* monitor = glfwGetPrimaryMonitor();
+	const GLFWvidmode* mode = glfwGetVideoMode(monitor);
+	glfwSetWindowPos(window, (mode->width - width)/2, (mode->height - height)/2);
 
     try {
         if (volkInitialize() != VK_SUCCESS) {
