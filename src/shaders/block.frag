@@ -7,8 +7,8 @@ layout(location = 3) in vec3 iPosition;
 
 layout(location = 0) out vec4 FragColor;
 
-layout(push_constant) uniform constants {
-    layout(offset = 64) vec3 viewPos;
+layout(binding = 0, std140) uniform constants {
+    layout(offset = 128) vec3 viewPos;
 };
 
 const vec3 light = vec3(1.0, 1.0, 1.0);

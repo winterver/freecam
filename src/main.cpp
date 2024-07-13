@@ -30,20 +30,16 @@ uint32_t sizeof_container(T container)
 struct Vertex
 {
     glm::vec3 position;
-    glm::vec3 color;
-
-    bool operator==(const Vertex& other) const {
-        return position == other.position && color == other.color;
-    }
+    glm::vec3 normal;
+    glm::vec2 texcoords;
 };
 
-namespace std {
-    template<> struct hash<Vertex> {
-        size_t operator()(Vertex const& vertex) const {
-            return hash<glm::vec3>()(vertex.position) ^ (hash<glm::vec3>()(vertex.color) << 1);
-        }
-    };
-}
+struct UniformBlock
+{
+    glm::mat4 MVP;
+    glm::mat4 uModel;
+    glm::vec3 viewPos;
+};
 
 namespace _ {
     using namespace glm;
@@ -97,7 +93,7 @@ public:
     float fov = 60.0f;
     float vertical = 0.0f;
     float horizontal = glm::pi<float>();
-    float speed = 30.0f;
+    float speed = 3.0f;
     float mouseSpeed = 0.002f;
     glm::vec3 position = glm::vec3(0.0f, 0.0f, 5.0f);
 
@@ -206,6 +202,7 @@ private:
     VmaAllocation depthImageAlloc;
 
     VkRenderPass renderPass;
+    VkDescriptorSetLayout descriptorSetLayout;
     VkPipelineLayout pipelineLayout;
     VkPipeline graphicsPipeline;
     VkPipeline blockPipeline;
@@ -220,6 +217,12 @@ private:
     VkBuffer blockBuffer;
     VmaAllocation blockAlloc;
     int blockCount;
+    VkBuffer uniformBuffer;
+    VmaAllocation uniformAlloc;
+    VmaAllocationInfo uniformInfo;
+
+    VkDescriptorPool descriptorPool;
+    VkDescriptorSet descriptorSet;
 
     VkCommandPool commandPool;
     VkCommandBuffer commandBuffer;
@@ -346,10 +349,11 @@ public:
         createDevice();
         createSwapchain();
         createDepthImage();
-        createPipeline();
+        createPipelines();
         createFramebuffers();
         createCommandPool();
-        createVertexBuffer();
+        createBuffers();
+        createDescriptors();
     }
 
     void findGPU()
@@ -637,7 +641,7 @@ public:
         }
     }
 
-    void createPipeline()
+    void createPipelines()
     {
         VkAttachmentDescription colorAttachmentDesc{};
         colorAttachmentDesc.format = swapchainImageFormat;
@@ -754,18 +758,25 @@ public:
         colorBlendInfo.blendConstants[2] = 0.0f;
         colorBlendInfo.blendConstants[3] = 0.0f;
 
-        std::array<VkPushConstantRange, 2> pushConstantRanges{};
-        pushConstantRanges[0].offset = 0;
-        pushConstantRanges[0].size = sizeof(glm::mat4);
-        pushConstantRanges[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-        pushConstantRanges[1].offset = sizeof(glm::mat4);
-        pushConstantRanges[1].size = sizeof(glm::vec3);
-        pushConstantRanges[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        VkDescriptorSetLayoutBinding uboLayoutBinding{};
+        uboLayoutBinding.binding = 0;
+        uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        uboLayoutBinding.descriptorCount = 1;
+        uboLayoutBinding.stageFlags = VK_SHADER_STAGE_ALL_GRAPHICS;
+
+        VkDescriptorSetLayoutCreateInfo descriptorSetLayoutInfo{};
+        descriptorSetLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        descriptorSetLayoutInfo.bindingCount = 1;
+        descriptorSetLayoutInfo.pBindings = &uboLayoutBinding;
+
+        if (vkCreateDescriptorSetLayout(device, &descriptorSetLayoutInfo, nullptr, &descriptorSetLayout) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to create descriptor set layout");
+        }
 
         VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
         pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-        pipelineLayoutInfo.pushConstantRangeCount = (uint32_t)pushConstantRanges.size();
-        pipelineLayoutInfo.pPushConstantRanges = pushConstantRanges.data();
+        pipelineLayoutInfo.setLayoutCount = 1;
+        pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;
 
         if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
             throw std::runtime_error("Failed to create pipeline layout");
@@ -797,7 +808,7 @@ public:
             bindingDescription[0].stride = sizeof(Vertex);
             bindingDescription[0].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
-            std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions{};
+            std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions{};
             attributeDescriptions[0].binding = 0;
             attributeDescriptions[0].location = 0;
             attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
@@ -805,7 +816,11 @@ public:
             attributeDescriptions[1].binding = 0;
             attributeDescriptions[1].location = 1;
             attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-            attributeDescriptions[1].offset = offsetof(Vertex, color);
+            attributeDescriptions[1].offset = offsetof(Vertex, normal);
+            attributeDescriptions[2].binding = 0;
+            attributeDescriptions[2].location = 2;
+            attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;
+            attributeDescriptions[2].offset = offsetof(Vertex, texcoords);
 
             VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
             vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -992,21 +1007,21 @@ public:
         }
     }
 
-    void createVertexBuffer()
+    void createBuffers()
     {
         tinyobj::attrib_t attrib;
         std::vector<tinyobj::shape_t> shapes;
         std::vector<tinyobj::material_t> materials;
         std::string warn, err;
 
-        if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, "src/models/Kotori.obj")) {
+        if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, "src/models/MAC10.obj")) {
             throw std::runtime_error(warn + err);
         }
 
         std::vector<Vertex> vertices;
         std::vector<uint32_t> indices;
 
-        std::unordered_map<Vertex, uint32_t> uniqueVertices{};
+        std::unordered_map<glm::ivec3, uint32_t> uniqueVertices{};
         for (const auto& shape : shapes) {
             for (const auto& index : shape.mesh.indices) {
                 Vertex vertex{};
@@ -1014,23 +1029,31 @@ public:
                 vertex.position = {
                     attrib.vertices[3 * index.vertex_index + 0],
                     attrib.vertices[3 * index.vertex_index + 1],
-                    attrib.vertices[3 * index.vertex_index + 2]
+                    attrib.vertices[3 * index.vertex_index + 2],
                 };
-                vertex.color = {
+                vertex.normal = {
                     attrib.normals[3 * index.normal_index + 0],
                     attrib.normals[3 * index.normal_index + 1],
-                    attrib.normals[3 * index.normal_index + 2]
+                    attrib.normals[3 * index.normal_index + 2],
+                };
+                vertex.texcoords = {
+                    attrib.texcoords[2 * index.texcoord_index + 0],
+                    1.0f - attrib.texcoords[2 * index.texcoord_index + 1],
                 };
 
-                if (uniqueVertices.count(vertex) == 0) {
-                    uniqueVertices[vertex] = (uint32_t)vertices.size();
+                glm::ivec3 vtx = {
+                    index.vertex_index, 
+                    index.normal_index, 
+                    index.texcoord_index,
+                };
+                if (uniqueVertices.count(vtx) == 0) {
+                    uniqueVertices[vtx] = (uint32_t)vertices.size();
                     vertices.push_back(vertex);
                 }
 
-                indices.push_back(uniqueVertices[vertex]);
+                indices.push_back(uniqueVertices[vtx]);
             }
         }
-
         indexCount = (int)indices.size();
 
         VkBufferCreateInfo vertexBufferInfo{};
@@ -1076,6 +1099,17 @@ public:
         allocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
         if (vmaCreateBuffer(allocator, &blockBufferInfo, &allocInfo, &blockBuffer, &blockAlloc, nullptr) != VK_SUCCESS) {
             throw std::runtime_error("Failed to create block buffer");
+        }
+
+        VkBufferCreateInfo uniformBufferInfo{};
+        uniformBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        uniformBufferInfo.size = sizeof(UniformBlock);
+        uniformBufferInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+        uniformBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+        allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+        if (vmaCreateBuffer(allocator, &uniformBufferInfo, &allocInfo, &uniformBuffer, &uniformAlloc, &uniformInfo) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to create uniform buffer");
         }
 
         VkBuffer stagingBuffer;
@@ -1148,6 +1182,49 @@ public:
         vmaFreeMemory(allocator, stagingAlloc);
     }
 
+    void createDescriptors()
+    {
+        VkDescriptorPoolSize poolSize{};
+        poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        poolSize.descriptorCount = 1;
+
+        VkDescriptorPoolCreateInfo poolInfo{};
+        poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        poolInfo.poolSizeCount = 1;
+        poolInfo.pPoolSizes = &poolSize;
+        poolInfo.maxSets = 1;
+
+        if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to create descriptor pool");
+        }
+
+        VkDescriptorSetAllocateInfo allocInfo{};
+        allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        allocInfo.descriptorPool = descriptorPool;
+        allocInfo.descriptorSetCount = 1;
+        allocInfo.pSetLayouts = &descriptorSetLayout;
+
+        if (vkAllocateDescriptorSets(device, &allocInfo, &descriptorSet) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to allocate descriptor set");
+        }
+
+        VkDescriptorBufferInfo bufferInfo{};
+        bufferInfo.buffer = uniformBuffer;
+        bufferInfo.offset = 0;
+        bufferInfo.range = sizeof(UniformBlock);
+
+        VkWriteDescriptorSet descriptorWrite{};
+        descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptorWrite.dstSet = descriptorSet;
+        descriptorWrite.dstBinding = 0;
+        descriptorWrite.dstArrayElement = 0;
+        descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        descriptorWrite.descriptorCount = 1;
+        descriptorWrite.pBufferInfo = &bufferInfo;
+
+        vkUpdateDescriptorSets(device, 1, &descriptorWrite, 0, nullptr);
+    }
+
     void recreateSwapchain() {
         int width = 0, height = 0;
         glfwGetFramebufferSize(window, &width, &height);
@@ -1212,11 +1289,16 @@ public:
             scissor.extent = swapchainExtent;
             vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
+            UniformBlock ublock;
             glm::mat4 model = glm::rotate((float)glfwGetTime(), glm::vec3(0.0f, 1.0f, 0.0f));
             glm::mat4 projectionView = camera.update(window);
             glm::mat4 MVP = projectionView * model;
-            vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4), &MVP[0][0]);
-            vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(glm::mat4), sizeof(glm::vec3), &camera.position[0]);
+            
+            ublock.MVP = MVP;
+            ublock.uModel = model;
+            ublock.viewPos = camera.position;
+            memcpy(uniformInfo.pMappedData, &ublock, sizeof(ublock));
+            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
 
             vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
 
@@ -1229,8 +1311,11 @@ public:
             vkCmdDrawIndexed(commandBuffer, indexCount, 1, 0, 0, 0);
 
 
-            vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4), &projectionView[0][0]);
-            vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(glm::mat4), sizeof(glm::vec3), &camera.position[0]);
+            /*ublock.MVP = projectionView;
+            ublock.uModel = glm::mat4(1.0f);
+            ublock.viewPos = camera.position;
+            memcpy(uniformInfo.pMappedData, &ublock, sizeof(ublock));
+            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
 
             vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, blockPipeline);
 
@@ -1238,7 +1323,7 @@ public:
             VkDeviceSize blockOffsets[] = { 0 };
             vkCmdBindVertexBuffers(commandBuffer, 0, 1, blockBuffers, blockOffsets);
 
-            vkCmdDraw(commandBuffer, 36, blockCount, 0, 0);
+            vkCmdDraw(commandBuffer, 36, blockCount, 0, 0);*/
 
         vkCmdEndRenderPass(commandBuffer);
 
@@ -1306,6 +1391,9 @@ public:
 
         vkDeviceWaitIdle(device);
 
+        vkDestroyDescriptorPool(device, descriptorPool, nullptr);
+        vkDestroyBuffer(device, uniformBuffer, nullptr);
+        vmaFreeMemory(allocator, uniformAlloc);
         vkDestroyBuffer(device, blockBuffer, nullptr);
         vmaFreeMemory(allocator, blockAlloc);
         vkDestroyBuffer(device, indexBuffer, nullptr);
@@ -1322,6 +1410,7 @@ public:
         vkDestroyPipeline(device, blockPipeline, nullptr);
         vkDestroyPipeline(device, graphicsPipeline, nullptr);
         vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
+        vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
         vkDestroyRenderPass(device, renderPass, nullptr);
         vkDestroyImageView(device, depthImageView, nullptr);
         vkDestroyImage(device, depthImage, nullptr);

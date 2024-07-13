@@ -8,8 +8,9 @@ layout(location = 1) out vec3 oNormal;
 layout(location = 2) out vec3 oVertColor;
 layout(location = 3) out vec3 oPosition;
 
-layout(push_constant) uniform constants {
+layout(binding = 0, std140) uniform constants {
     mat4 MVP;
+    mat4 uModel;
 };
 
 const vec3 vertices[8] = {
