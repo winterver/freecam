@@ -11,18 +11,17 @@ layout(binding = 0, std140) uniform constants {
 };
 
 layout(binding = 1) uniform sampler2D albedoMap;
+layout(binding = 2) uniform sampler2D normalMap;
 /*
-uniform sampler2D normalMap;
 uniform sampler2D metallicMap;
 uniform sampler2D roughnessMap;
 */
 
 vec3 materialcolor()
 {
-  return texture(albedoMap, TexCoords).rgb;
+    return texture(albedoMap, TexCoords).rgb;
 }
 
-/*
 vec3 computeTBN()
 {
     vec3 tangentNormal = texture(normalMap, TexCoords).xyz * 2.0 - 1.0;
@@ -94,19 +93,20 @@ vec3 BRDF(vec3 L, vec3 V, vec3 N, float metallic, float roughness)
 
 	return color;
 }
-*/
 
 void main()
 {
-/*
     vec3 N = computeTBN();
 	vec3 V = normalize(viewPos - WorldPos);
-	float M = texture(metallicMap, TexCoords).r;
-	float R = texture(roughnessMap, TexCoords).r;
+	//float M = texture(metallicMap, TexCoords).r;
+	//float R = texture(roughnessMap, TexCoords).r;
+    float M = 1;
+	float R = 1;
 
     #define NUM_LIGHTS 1
     vec3 lightPos[] = {
-        vec3(0.0f, 0.0f, 10.0f),
+        viewPos,
+        vec3(0.0f, 0.0f, 5.0f),
         vec3(10.0f, 0.0f, 0.0f),
     };
 
@@ -116,10 +116,7 @@ void main()
 	  Lo += BRDF(L, V, N, M, R);
 	}
 
-	vec3 color = materialcolor() * 0.03;
-	color += Lo;
-	FragColor = pow(color, vec3(1.4/2.2));
-*/
-    //FragColor = vec4(Normal, 1);
-    FragColor = vec4(materialcolor(), 1);
+	Lo += materialcolor() * 0.03;
+
+	FragColor = vec4(pow(Lo, vec3(1.0/2.2)), 1);
 }
