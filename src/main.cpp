@@ -216,35 +216,31 @@ private:
     VmaAllocation indexAlloc;
     int indexCount;
 
+    VkSampler sampler;
+
     VkImage albedoMap;
     VmaAllocation albedoAlloc;
     VkImageView albedoView;
-    VkSampler albedoSampler;
 
     VkImage normalMap;
     VmaAllocation normalAlloc;
     VkImageView normalView;
-    VkSampler normalSampler;
 
     VkImage metallicMap;
     VmaAllocation metallicAlloc;
     VkImageView metallicView;
-    VkSampler metallicSampler;
 
     VkImage roughnessMap;
     VmaAllocation roughnessAlloc;
     VkImageView roughnessView;
-    VkSampler roughnessSampler;
 
     VkImage defaultMetallicMap;
     VmaAllocation defaultMetallicAlloc;
     VkImageView defaultMetallicView;
-    VkSampler defaultMetallicSampler;
 
     VkImage defaultRoughnessMap;
     VmaAllocation defaultRoughnessAlloc;
     VkImageView defaultRoughnessView;
-    VkSampler defaultRoughnessSampler;
 
     //VkBuffer blockBuffer;
     //VmaAllocation blockAlloc;
@@ -1147,7 +1143,27 @@ public:
             throw std::runtime_error("Failed to create index buffer");
         }
 
-        auto createTexture = [&](int width, int height, VkImage* image, VmaAllocation* imageAlloc, VkImageView* imageView, VkSampler* sampler) {
+        VkSamplerCreateInfo samplerInfo{};
+        samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+        samplerInfo.magFilter = VK_FILTER_LINEAR;
+        samplerInfo.minFilter = VK_FILTER_LINEAR;
+        samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+        samplerInfo.unnormalizedCoordinates = VK_FALSE;
+        samplerInfo.compareEnable = VK_FALSE;
+        samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+        samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+        samplerInfo.mipLodBias = 0.0f;
+        samplerInfo.minLod = 0.0f;
+        samplerInfo.maxLod = 0.0f;
+
+        if (vkCreateSampler(device, &samplerInfo, nullptr, &sampler) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to create sampler");
+        }
+
+        auto createTexture = [&](int width, int height, VkImage* image, VmaAllocation* imageAlloc, VkImageView* imageView) {
             VkImageCreateInfo imageInfo{};
             imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
             imageInfo.imageType = VK_IMAGE_TYPE_2D;
@@ -1185,40 +1201,15 @@ public:
 
             if (vkCreateImageView(device, &viewInfo, nullptr, imageView) != VK_SUCCESS) {
                 throw std::runtime_error("Failed to create image view");
-            }
-
-            VkPhysicalDeviceProperties properties{};
-            vkGetPhysicalDeviceProperties(physicalDevice, &properties);
-
-            VkSamplerCreateInfo samplerInfo{};
-            samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-            samplerInfo.magFilter = VK_FILTER_LINEAR;
-            samplerInfo.minFilter = VK_FILTER_LINEAR;
-            samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-            samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-            samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-            //samplerInfo.anisotropyEnable = VK_TRUE;
-            samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
-            samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-            samplerInfo.unnormalizedCoordinates = VK_FALSE;
-            samplerInfo.compareEnable = VK_FALSE;
-            samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
-            samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-            samplerInfo.mipLodBias = 0.0f;
-            samplerInfo.minLod = 0.0f;
-            samplerInfo.maxLod = 0.0f;
-
-            if (vkCreateSampler(device, &samplerInfo, nullptr, sampler) != VK_SUCCESS) {
-                throw std::runtime_error("Failed to create sampler");
-            }
+            } 
         };
 
-        createTexture(albedoWidth, albedoHeight, &albedoMap, &albedoAlloc, &albedoView, &albedoSampler);
-        createTexture(normalWidth, normalHeight, &normalMap, &normalAlloc, &normalView, &normalSampler);
-        //createTexture(metallicWidth, metallicHeight, &metallicMap, &metallicAlloc, &metallicView, &metallicSampler);
-        //createTexture(roughnessWidth, roughnessHeight, &roughnessMap, &roughnessAlloc, &roughnessView, &roughnessSampler);
-        createTexture(1, 1, &defaultMetallicMap, &defaultMetallicAlloc, &defaultMetallicView, &defaultMetallicSampler);
-        createTexture(1, 1, &defaultRoughnessMap, &defaultRoughnessAlloc, &defaultRoughnessView, &defaultRoughnessSampler);
+        createTexture(albedoWidth, albedoHeight, &albedoMap, &albedoAlloc, &albedoView);
+        createTexture(normalWidth, normalHeight, &normalMap, &normalAlloc, &normalView);
+        //createTexture(metallicWidth, metallicHeight, &metallicMap, &metallicAlloc, &metallicView);
+        //createTexture(roughnessWidth, roughnessHeight, &roughnessMap, &roughnessAlloc, &roughnessView);
+        createTexture(1, 1, &defaultMetallicMap, &defaultMetallicAlloc, &defaultMetallicView);
+        createTexture(1, 1, &defaultRoughnessMap, &defaultRoughnessAlloc, &defaultRoughnessView);
 
         /*std::vector<glm::ivec4> blocks;
         for (int z = 0; z < 128; z++) {
@@ -1459,26 +1450,24 @@ public:
         VkDescriptorImageInfo albedoImageInfo{};
         albedoImageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         albedoImageInfo.imageView = albedoView;
-        albedoImageInfo.sampler = albedoSampler;
+        albedoImageInfo.sampler = sampler;
 
         VkDescriptorImageInfo normalImageInfo{};
         normalImageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         normalImageInfo.imageView = normalView;
-        normalImageInfo.sampler = normalSampler;
+        normalImageInfo.sampler = sampler;
 
         VkDescriptorImageInfo metallicImageInfo{};
         metallicImageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         //metallicImageInfo.imageView = metallicView;
-        //metallicImageInfo.sampler = metallicSampler;
         metallicImageInfo.imageView = defaultMetallicView;
-        metallicImageInfo.sampler = defaultMetallicSampler;
+        metallicImageInfo.sampler = sampler;
 
         VkDescriptorImageInfo roughnessImageInfo{};
         roughnessImageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         //roughnessImageInfo.imageView = roughnessView;
-        //roughnessImageInfo.sampler = roughnessSampler;
         roughnessImageInfo.imageView = defaultRoughnessView;
-        roughnessImageInfo.sampler = defaultRoughnessSampler;
+        roughnessImageInfo.sampler = sampler;
 
         std::array<VkWriteDescriptorSet, 5> descriptorWrites{};
         // ubo
@@ -1699,33 +1688,29 @@ public:
         //vkDestroyBuffer(device, blockBuffer, nullptr);
         //vmaFreeMemory(allocator, blockAlloc);
 
-        vkDestroySampler(device, defaultRoughnessSampler, nullptr);
         vkDestroyImageView(device, defaultRoughnessView, nullptr);
         vkDestroyImage(device, defaultRoughnessMap, nullptr);
         vmaFreeMemory(allocator, defaultRoughnessAlloc);
-        vkDestroySampler(device, defaultMetallicSampler, nullptr);
         vkDestroyImageView(device, defaultMetallicView, nullptr);
         vkDestroyImage(device, defaultMetallicMap, nullptr);
         vmaFreeMemory(allocator, defaultMetallicAlloc);
 
         /*
-        vkDestroySampler(device, roughnessSampler, nullptr);
         vkDestroyImageView(device, roughnessView, nullptr);
         vkDestroyImage(device, roughnessMap, nullptr);
         vmaFreeMemory(allocator, roughnessAlloc);
-        vkDestroySampler(device, metallicSampler, nullptr);
         vkDestroyImageView(device, metallicView, nullptr);
         vkDestroyImage(device, metallicMap, nullptr);
         vmaFreeMemory(allocator, metallicAlloc);
         */
-        vkDestroySampler(device, normalSampler, nullptr);
         vkDestroyImageView(device, normalView, nullptr);
         vkDestroyImage(device, normalMap, nullptr);
         vmaFreeMemory(allocator, normalAlloc);
-        vkDestroySampler(device, albedoSampler, nullptr);
         vkDestroyImageView(device, albedoView, nullptr);
         vkDestroyImage(device, albedoMap, nullptr);
         vmaFreeMemory(allocator, albedoAlloc);
+
+        vkDestroySampler(device, sampler, nullptr);
 
         vkDestroyBuffer(device, indexBuffer, nullptr);
         vmaFreeMemory(allocator, indexAlloc);
