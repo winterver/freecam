@@ -6,23 +6,23 @@ layout(location = 2) in vec2 TexCoords;
 
 layout(location = 0) out vec4 FragColor;
 
+layout(binding = 0, std140) uniform constants {
+    layout(offset = 128) vec3 viewPos;
+};
+
+layout(binding = 1) uniform sampler2D albedoMap;
 /*
-uniform sampler2D albedoMap;
 uniform sampler2D normalMap;
 uniform sampler2D metallicMap;
 uniform sampler2D roughnessMap;
 */
 
-layout(binding = 0, std140) uniform constants {
-    layout(offset = 128) vec3 viewPos;
-};
-
-/*
 vec3 materialcolor()
 {
   return texture(albedoMap, TexCoords).rgb;
 }
 
+/*
 vec3 computeTBN()
 {
     vec3 tangentNormal = texture(normalMap, TexCoords).xyz * 2.0 - 1.0;
@@ -120,5 +120,6 @@ void main()
 	color += Lo;
 	FragColor = pow(color, vec3(1.4/2.2));
 */
-    FragColor = vec4(Normal, 1);
+    //FragColor = vec4(Normal, 1);
+    FragColor = vec4(materialcolor(), 1);
 }
