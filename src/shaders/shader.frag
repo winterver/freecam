@@ -12,10 +12,8 @@ layout(binding = 0, std140) uniform constants {
 
 layout(binding = 1) uniform sampler2D albedoMap;
 layout(binding = 2) uniform sampler2D normalMap;
-/*
-uniform sampler2D metallicMap;
-uniform sampler2D roughnessMap;
-*/
+layout(binding = 3) uniform sampler2D metallicMap;
+layout(binding = 4) uniform sampler2D roughnessMap;
 
 vec3 materialcolor()
 {
@@ -98,12 +96,10 @@ void main()
 {
     vec3 N = computeTBN();
 	vec3 V = normalize(viewPos - WorldPos);
-	//float M = texture(metallicMap, TexCoords).r;
-	//float R = texture(roughnessMap, TexCoords).r;
-    float M = 1;
-	float R = 1;
+	float M = texture(metallicMap, TexCoords).r;
+	float R = texture(roughnessMap, TexCoords).r;
 
-    #define NUM_LIGHTS 1
+    #define NUM_LIGHTS 3
     vec3 lightPos[] = {
         viewPos,
         vec3(0.0f, 0.0f, 5.0f),
@@ -113,6 +109,7 @@ void main()
 	vec3 Lo = vec3(0.0);
 	for (int i = 0; i < NUM_LIGHTS; i++) {
 	  vec3 L = normalize(lightPos[i] - WorldPos);
+	  //vec3 L = normalize(vec3(10, 10, 0));
 	  Lo += BRDF(L, V, N, M, R);
 	}
 

@@ -217,13 +217,24 @@ private:
     int indexCount;
 
     VkImage albedoMap;
-    VkImage normalMap;
     VmaAllocation albedoAlloc;
-    VmaAllocation normalAlloc;
     VkImageView albedoView;
-    VkImageView normalView;
     VkSampler albedoSampler;
+
+    VkImage normalMap;
+    VmaAllocation normalAlloc;
+    VkImageView normalView;
     VkSampler normalSampler;
+
+    VkImage metallicMap;
+    VmaAllocation metallicAlloc;
+    VkImageView metallicView;
+    VkSampler metallicSampler;
+
+    VkImage roughnessMap;
+    VmaAllocation roughnessAlloc;
+    VkImageView roughnessView;
+    VkSampler roughnessSampler;
 
     //VkBuffer blockBuffer;
     //VmaAllocation blockAlloc;
@@ -770,7 +781,7 @@ public:
         colorBlendInfo.blendConstants[2] = 0.0f;
         colorBlendInfo.blendConstants[3] = 0.0f;
 
-        std::array<VkDescriptorSetLayoutBinding, 3> layoutBindings{};
+        std::array<VkDescriptorSetLayoutBinding, 5> layoutBindings{};
         // ubo
         layoutBindings[0].binding = 0;
         layoutBindings[0].descriptorCount = 1;
@@ -786,6 +797,16 @@ public:
         layoutBindings[2].descriptorCount = 1;
         layoutBindings[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         layoutBindings[2].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        // metallic
+        layoutBindings[3].binding = 3;
+        layoutBindings[3].descriptorCount = 1;
+        layoutBindings[3].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        layoutBindings[3].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        // roughness
+        layoutBindings[4].binding = 4;
+        layoutBindings[4].descriptorCount = 1;
+        layoutBindings[4].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        layoutBindings[4].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
         VkDescriptorSetLayoutCreateInfo descriptorSetLayoutInfo{};
         descriptorSetLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -1037,7 +1058,7 @@ public:
         std::vector<tinyobj::material_t> materials;
         std::string warn, err;
 
-        if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, "src/models/MAC10.obj")) {
+        if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, "src/models/M1A1_Thompson.obj")) {
             throw std::runtime_error(warn + err);
         }
 
@@ -1082,9 +1103,13 @@ public:
         int texChannels;
         int albedoWidth, albedoHeight;
         int normalWidth, normalHeight;
-        stbi_uc* albedoPixels = stbi_load("src/models/MAC10_albedo.png", &albedoWidth, &albedoHeight, &texChannels, STBI_rgb_alpha);
-        stbi_uc* normalPixels = stbi_load("src/models/MAC10_normal.png", &normalWidth, &normalHeight, &texChannels, STBI_rgb_alpha);
-        if (!albedoPixels || !normalPixels) {
+        int metallicWidth, metallicHeight;
+        int roughnessWidth, roughnessHeight;
+        stbi_uc* albedoPixels = stbi_load("src/models/M1A1_Thompson_Albedo_1K.png", &albedoWidth, &albedoHeight, &texChannels, STBI_rgb_alpha);
+        stbi_uc* normalPixels = stbi_load("src/models/M1A1_Thompson_Normal_1K.png", &normalWidth, &normalHeight, &texChannels, STBI_rgb_alpha);
+        stbi_uc* metallicPixels = stbi_load("src/models/M1A1_Thompson_Metallic_1K.png", &metallicWidth, &metallicHeight, &texChannels, STBI_rgb_alpha);
+        stbi_uc* roughnessPixels = stbi_load("src/models/M1A1_Thompson_Roughness_1K.png", &roughnessWidth, &roughnessHeight, &texChannels, STBI_rgb_alpha);
+        if (!albedoPixels || !normalPixels || !metallicPixels || !roughnessPixels) {
             throw std::runtime_error("Failed load textures");
         }
 
@@ -1180,6 +1205,8 @@ public:
 
         createTexture(albedoWidth, albedoHeight, &albedoMap, &albedoAlloc, &albedoView, &albedoSampler);
         createTexture(normalWidth, normalHeight, &normalMap, &normalAlloc, &normalView, &normalSampler);
+        createTexture(metallicWidth, metallicHeight, &metallicMap, &metallicAlloc, &metallicView, &metallicSampler);
+        createTexture(roughnessWidth, roughnessHeight, &roughnessMap, &roughnessAlloc, &roughnessView, &roughnessSampler);
 
         /*std::vector<glm::ivec4> blocks;
         for (int z = 0; z < 128; z++) {
@@ -1357,17 +1384,21 @@ public:
         uploadData(indexBuffer, indices.data(), sizeof_container(indices));
         uploadImage(albedoMap, albedoPixels, albedoWidth, albedoHeight, 4);
         uploadImage(normalMap, normalPixels, normalWidth, normalHeight, 4);
+        uploadImage(metallicMap, metallicPixels, metallicWidth, metallicHeight, 4);
+        uploadImage(roughnessMap, roughnessPixels, roughnessWidth, roughnessHeight, 4);
         //uploadData(blockBuffer, blocks.data(), sizeof_container(blocks));
 
         vkDestroyBuffer(device, stagingBuffer, nullptr);
         vmaFreeMemory(allocator, stagingAlloc);
         stbi_image_free(albedoPixels);
         stbi_image_free(normalPixels);
+        stbi_image_free(metallicPixels);
+        stbi_image_free(roughnessPixels);
     }
 
     void createDescriptors()
     {
-        std::array<VkDescriptorPoolSize, 3> poolSizes{};
+        std::array<VkDescriptorPoolSize, 5> poolSizes{};
         // ubo
         poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         poolSizes[0].descriptorCount = 1;
@@ -1377,6 +1408,12 @@ public:
         // normal
         poolSizes[2].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         poolSizes[2].descriptorCount = 1;
+        // metallic
+        poolSizes[3].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        poolSizes[3].descriptorCount = 1;
+        // roughness
+        poolSizes[4].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        poolSizes[4].descriptorCount = 1;
 
         VkDescriptorPoolCreateInfo poolInfo{};
         poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -1413,7 +1450,17 @@ public:
         normalImageInfo.imageView = normalView;
         normalImageInfo.sampler = normalSampler;
 
-        std::array<VkWriteDescriptorSet, 3> descriptorWrites{};
+        VkDescriptorImageInfo metallicImageInfo{};
+        metallicImageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        metallicImageInfo.imageView = metallicView;
+        metallicImageInfo.sampler = metallicSampler;
+
+        VkDescriptorImageInfo roughnessImageInfo{};
+        roughnessImageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        roughnessImageInfo.imageView = roughnessView;
+        roughnessImageInfo.sampler = roughnessSampler;
+
+        std::array<VkWriteDescriptorSet, 5> descriptorWrites{};
         // ubo
         descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         descriptorWrites[0].dstSet = descriptorSet;
@@ -1438,6 +1485,22 @@ public:
         descriptorWrites[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         descriptorWrites[2].descriptorCount = 1;
         descriptorWrites[2].pImageInfo = &normalImageInfo;
+        // metallic
+        descriptorWrites[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptorWrites[3].dstSet = descriptorSet;
+        descriptorWrites[3].dstBinding = 3;
+        descriptorWrites[3].dstArrayElement = 0;
+        descriptorWrites[3].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        descriptorWrites[3].descriptorCount = 1;
+        descriptorWrites[3].pImageInfo = &metallicImageInfo;
+        // roughness
+        descriptorWrites[4].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptorWrites[4].dstSet = descriptorSet;
+        descriptorWrites[4].dstBinding = 4;
+        descriptorWrites[4].dstArrayElement = 0;
+        descriptorWrites[4].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        descriptorWrites[4].descriptorCount = 1;
+        descriptorWrites[4].pImageInfo = &roughnessImageInfo;
 
         vkUpdateDescriptorSets(device, (uint32_t)descriptorWrites.size(), descriptorWrites.data(), 0, nullptr);
     }
@@ -1507,12 +1570,12 @@ public:
             vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
             UniformBlock ublock;
-            glm::mat4 model = glm::rotate((float)glfwGetTime(), glm::vec3(0.0f, 1.0f, 0.0f));
+            glm::mat4 model = glm::scale(glm::vec3(5.0f));//glm::rotate((float)glfwGetTime(), glm::vec3(0.0f, 1.0f, 0.0f));
             glm::mat4 projectionView = camera.update(window);
             glm::mat4 MVP = projectionView * model;
             
-            ublock.MVP = projectionView;
-            ublock.uModel = glm::mat4(1.0f);
+            ublock.MVP = MVP;
+            ublock.uModel = model;
             ublock.viewPos = camera.position;
             memcpy(uniformInfo.pMappedData, &ublock, sizeof(ublock));
             vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
@@ -1612,8 +1675,18 @@ public:
         vkDestroyDescriptorPool(device, descriptorPool, nullptr);
         vkDestroyBuffer(device, uniformBuffer, nullptr);
         vmaFreeMemory(allocator, uniformAlloc);
+
         //vkDestroyBuffer(device, blockBuffer, nullptr);
         //vmaFreeMemory(allocator, blockAlloc);
+
+        vkDestroySampler(device, roughnessSampler, nullptr);
+        vkDestroyImageView(device, roughnessView, nullptr);
+        vkDestroyImage(device, roughnessMap, nullptr);
+        vmaFreeMemory(allocator, roughnessAlloc);
+        vkDestroySampler(device, metallicSampler, nullptr);
+        vkDestroyImageView(device, metallicView, nullptr);
+        vkDestroyImage(device, metallicMap, nullptr);
+        vmaFreeMemory(allocator, metallicAlloc);
         vkDestroySampler(device, normalSampler, nullptr);
         vkDestroyImageView(device, normalView, nullptr);
         vkDestroyImage(device, normalMap, nullptr);
