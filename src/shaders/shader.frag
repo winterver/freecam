@@ -99,10 +99,9 @@ void main()
 	float M = texture(metallicMap, TexCoords).r;
 	float R = texture(roughnessMap, TexCoords).r;
 
-    #define NUM_LIGHTS 3
+    #define NUM_LIGHTS 2
     vec3 lightPos[] = {
-        viewPos,
-        vec3(0.0f, 0.0f, 5.0f),
+        vec3(0.0f, 0.0f, 10.0f),
         vec3(10.0f, 0.0f, 0.0f),
     };
 

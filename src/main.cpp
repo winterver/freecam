@@ -1064,7 +1064,7 @@ public:
         std::vector<tinyobj::material_t> materials;
         std::string warn, err;
 
-        if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, "src/models/MAC10.obj")) {
+        if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, "src/models/Sphere.obj")) {
             throw std::runtime_error(warn + err);
         }
 
@@ -1109,13 +1109,14 @@ public:
         int texChannels;
         int albedoWidth, albedoHeight;
         int normalWidth, normalHeight;
-        //int metallicWidth, metallicHeight;
-        //int roughnessWidth, roughnessHeight;
-        stbi_uc* albedoPixels = stbi_load("src/models/MAC10_albedo.png", &albedoWidth, &albedoHeight, &texChannels, STBI_rgb_alpha);
-        stbi_uc* normalPixels = stbi_load("src/models/MAC10_normal.png", &normalWidth, &normalHeight, &texChannels, STBI_rgb_alpha);
-        //stbi_uc* metallicPixels = stbi_load("src/models/M1A1_Thompson_Metallic_1K.png", &metallicWidth, &metallicHeight, &texChannels, STBI_rgb_alpha);
-        //stbi_uc* roughnessPixels = stbi_load("src/models/M1A1_Thompson_Roughness_1K.png", &roughnessWidth, &roughnessHeight, &texChannels, STBI_rgb_alpha);
-        if (!albedoPixels || !normalPixels /*|| !metallicPixels || !roughnessPixels*/) {
+        int metallicWidth, metallicHeight;
+        int roughnessWidth, roughnessHeight;
+        stbi_uc* albedoPixels = stbi_load("src/models/rustediron2_basecolor.png", &albedoWidth, &albedoHeight, &texChannels, STBI_rgb_alpha);
+        stbi_uc* normalPixels = stbi_load("src/models/rustediron2_normal.png", &normalWidth, &normalHeight, &texChannels, STBI_rgb_alpha);
+        stbi_uc* metallicPixels = stbi_load("src/models/rustediron2_metallic.png", &metallicWidth, &metallicHeight, &texChannels, STBI_rgb_alpha);
+        stbi_uc* roughnessPixels = stbi_load("src/models/rustediron2_roughness.png", &roughnessWidth, &roughnessHeight, &texChannels, STBI_rgb_alpha);
+
+        if (!albedoPixels || !normalPixels || !metallicPixels || !roughnessPixels) {
             throw std::runtime_error("Failed load textures");
         }
 
@@ -1206,10 +1207,10 @@ public:
 
         createTexture(albedoWidth, albedoHeight, &albedoMap, &albedoAlloc, &albedoView);
         createTexture(normalWidth, normalHeight, &normalMap, &normalAlloc, &normalView);
-        //createTexture(metallicWidth, metallicHeight, &metallicMap, &metallicAlloc, &metallicView);
-        //createTexture(roughnessWidth, roughnessHeight, &roughnessMap, &roughnessAlloc, &roughnessView);
-        createTexture(1, 1, &defaultMetallicMap, &defaultMetallicAlloc, &defaultMetallicView);
-        createTexture(1, 1, &defaultRoughnessMap, &defaultRoughnessAlloc, &defaultRoughnessView);
+        createTexture(metallicWidth, metallicHeight, &metallicMap, &metallicAlloc, &metallicView);
+        createTexture(roughnessWidth, roughnessHeight, &roughnessMap, &roughnessAlloc, &roughnessView);
+        //createTexture(1, 1, &defaultMetallicMap, &defaultMetallicAlloc, &defaultMetallicView);
+        //createTexture(1, 1, &defaultRoughnessMap, &defaultRoughnessAlloc, &defaultRoughnessView);
 
         /*std::vector<glm::ivec4> blocks;
         for (int z = 0; z < 128; z++) {
@@ -1387,20 +1388,21 @@ public:
         uploadData(indexBuffer, indices.data(), sizeof_container(indices));
         uploadImage(albedoMap, albedoPixels, albedoWidth, albedoHeight, 4);
         uploadImage(normalMap, normalPixels, normalWidth, normalHeight, 4);
-        //uploadImage(metallicMap, metallicPixels, metallicWidth, metallicHeight, 4);
-        //uploadImage(roughnessMap, roughnessPixels, roughnessWidth, roughnessHeight, 4);
+        uploadImage(metallicMap, metallicPixels, metallicWidth, metallicHeight, 4);
+        uploadImage(roughnessMap, roughnessPixels, roughnessWidth, roughnessHeight, 4);
 
-        unsigned char defaultPixels[] = { 255, 255, 255, 255 };
-        uploadImage(defaultMetallicMap, defaultPixels, 1, 1, 4);
-        uploadImage(defaultRoughnessMap, defaultPixels, 1, 1, 4);
+        //unsigned char defaultPixels[] = { 255, 255, 255, 255 };
+        //uploadImage(defaultMetallicMap, defaultPixels, 1, 1, 4);
+        //uploadImage(defaultRoughnessMap, defaultPixels, 1, 1, 4);
+
         //uploadData(blockBuffer, blocks.data(), sizeof_container(blocks));
 
         vkDestroyBuffer(device, stagingBuffer, nullptr);
         vmaFreeMemory(allocator, stagingAlloc);
         stbi_image_free(albedoPixels);
         stbi_image_free(normalPixels);
-        //stbi_image_free(metallicPixels);
-        //stbi_image_free(roughnessPixels);
+        stbi_image_free(metallicPixels);
+        stbi_image_free(roughnessPixels);
     }
 
     void createDescriptors()
@@ -1440,14 +1442,14 @@ public:
 
         VkDescriptorImageInfo metallicImageInfo{};
         metallicImageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        //metallicImageInfo.imageView = metallicView;
-        metallicImageInfo.imageView = defaultMetallicView;
+        metallicImageInfo.imageView = metallicView;
+        //metallicImageInfo.imageView = defaultMetallicView;
         metallicImageInfo.sampler = sampler;
 
         VkDescriptorImageInfo roughnessImageInfo{};
         roughnessImageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        //roughnessImageInfo.imageView = roughnessView;
-        roughnessImageInfo.imageView = defaultRoughnessView;
+        roughnessImageInfo.imageView = roughnessView;
+        //roughnessImageInfo.imageView = defaultRoughnessView;
         roughnessImageInfo.sampler = sampler;
 
         std::array<VkWriteDescriptorSet, 5> descriptorWrites{};
@@ -1560,7 +1562,7 @@ public:
             vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
             UniformBlock ublock;
-            glm::mat4 model = glm::mat4(1.0f);//glm::rotate((float)glfwGetTime(), glm::vec3(0.0f, 1.0f, 0.0f));
+            glm::mat4 model(1.0f); //= glm::rotate((float)glfwGetTime(), glm::vec3(0.0f, 1.0f, 0.0f));
             glm::mat4 projectionView = camera.update(window);
             glm::mat4 MVP = projectionView * model;
             
@@ -1669,21 +1671,21 @@ public:
         //vkDestroyBuffer(device, blockBuffer, nullptr);
         //vmaFreeMemory(allocator, blockAlloc);
 
+        /*
         vkDestroyImageView(device, defaultRoughnessView, nullptr);
         vkDestroyImage(device, defaultRoughnessMap, nullptr);
         vmaFreeMemory(allocator, defaultRoughnessAlloc);
         vkDestroyImageView(device, defaultMetallicView, nullptr);
         vkDestroyImage(device, defaultMetallicMap, nullptr);
         vmaFreeMemory(allocator, defaultMetallicAlloc);
+        */
 
-        /*
         vkDestroyImageView(device, roughnessView, nullptr);
         vkDestroyImage(device, roughnessMap, nullptr);
         vmaFreeMemory(allocator, roughnessAlloc);
         vkDestroyImageView(device, metallicView, nullptr);
         vkDestroyImage(device, metallicMap, nullptr);
         vmaFreeMemory(allocator, metallicAlloc);
-        */
         vkDestroyImageView(device, normalView, nullptr);
         vkDestroyImage(device, normalMap, nullptr);
         vmaFreeMemory(allocator, normalAlloc);
